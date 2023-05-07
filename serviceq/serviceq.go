@@ -267,6 +267,11 @@ func NewServiceQ(name string, redisHost string, redisPort string, password ...st
 	s.pause = make(chan bool)
 	// s.SyncUp()
 
+	if s.workerCount > 0 {
+		// start the go routine
+		go worker(s, s.start, s.stop, s.pause)
+	}
+
 	// return the object
 	return s, nil
 }
@@ -389,6 +394,11 @@ func (s *ServiceQ) SetWorkerConfig(count int, waitingPeriod int, restingPeriod i
 	s.waitingPeriod = waitingPeriod
 	s.restingPeriod = restingPeriod
 
+	if s.workerCount > 0 {
+		// start the go routine
+		go worker(s, s.start, s.stop, s.pause)
+	}
+
 	// s.SyncUp()
 }
 
@@ -441,9 +451,6 @@ func (s *ServiceQ) Start() error {
 	if s.status == "RUNNING" {
 		return fmt.Errorf("job is already running")
 	}
-
-	// start the go routine
-	go worker(s, s.start, s.stop, s.pause)
 
 	return nil
 }
@@ -601,6 +608,11 @@ func (s *ServiceQ) Push(item interface{}) error {
 	taskJson, err := json.Marshal(task)
 	if err != nil {
 		return err
+	}
+
+	if s.autoStart && s.workerCount > 0 {
+		// start the service queue if not already running
+		s.Start()
 	}
 
 	// stringify the json and push to the queue
