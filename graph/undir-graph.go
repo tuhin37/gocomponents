@@ -1,0 +1,5 @@
+package graph
+
+/*
+	Undirected graph
+*/
