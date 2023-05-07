@@ -1,29 +1,30 @@
-package main
+package gocomponents
 
-import (
-	"fmt"
+// import (
+// 	"fmt"
 
-	"github.com/tuhin37/gocomponents/serviceq"
-)
+// 	"github.com/tuhin37/gocomponents/serviceq"
+// )
 
-// import
+// // import
 
-// Define the function to be passed to SetWorkerFunction
-var task = func(t interface{}) bool {
-	fmt.Println("from task  function: ", t)
-	return false
-}
+// // Define the function to be passed to SetWorkerFunction
+// var task = func(t interface{}) bool {
+// 	fmt.Println("from task  function: ", t)
+// 	return false
+// }
 
-func main() {
-	svcQ, _ := serviceq.NewServiceQ("drag", "localhost", "6379", "")
-	svcQ.SetWorkerConfig(1, 1, 0)
-	svcQ.SetRetryConfig(5, 3)
-	svcQ.SetTaskFunction(task)
-	fmt.Println(svcQ.Describe())
+// func main() {
 
-	svcQ.Start()
+// 	svcQ, _ := serviceq.NewServiceQ("drag", "localhost", "6379", "")
+// 	svcQ.SetWorkerConfig(1, 1, 0)
+// 	svcQ.SetRetryConfig(5, 3)
+// 	svcQ.SetTaskFunction(task)
+// 	fmt.Println(svcQ.Describe())
 
-	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
+// 	svcQ.Start()
 
-	// svcQ.Delete()
-}
+// 	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
+
+// 	// svcQ.Delete()
+// }
