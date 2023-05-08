@@ -1,30 +1,34 @@
-package gocomponents
+package main
 
-// import (
-// 	"fmt"
+import (
+	"fmt"
 
-// 	"github.com/tuhin37/gocomponents/serviceq"
-// )
+	"github.com/tuhin37/gocomponents/serviceq"
+)
 
-// // import
+// import
 
-// // Define the function to be passed to SetWorkerFunction
-// var task = func(t interface{}) bool {
-// 	fmt.Println("from task  function: ", t)
-// 	return false
-// }
+// Define the function to be passed to SetWorkerFunction
+var task = func(t interface{}) bool {
+	fmt.Println("from task  function: ", t)
+	return false
+}
 
-// func main() {
+func main() {
 
-// 	svcQ, _ := serviceq.NewServiceQ("drag", "localhost", "6379", "")
-// 	svcQ.SetWorkerConfig(1, 1, 0)
-// 	svcQ.SetRetryConfig(5, 3)
-// 	svcQ.SetTaskFunction(task)
-// 	fmt.Println(svcQ.Describe())
+	svcQ, _ := serviceq.NewServiceQ("drag", "localhost", "6379", "")
+	svcQ.SetWorkerConfig(1, 1, 0)
+	svcQ.SetRetryConfig(5, 3)
+	svcQ.SetTaskFunction(task)
+	fmt.Println(svcQ.Describe())
 
-// 	svcQ.Start()
+	svcQ.Start()
 
-// 	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
+	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
+	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
+	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
+	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
+	// svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
 
-// 	// svcQ.Delete()
-// }
+	// svcQ.Delete()
+}

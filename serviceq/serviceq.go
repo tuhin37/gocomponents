@@ -452,6 +452,9 @@ func (s *ServiceQ) Start() error {
 		return fmt.Errorf("job is already running")
 	}
 
+	// send signal to worker to stop
+	s.start <- true
+
 	return nil
 }
 
