@@ -23,13 +23,13 @@ package serviceq
 					"task": {}							// actual task
 					"batchID": "1234567890"				// batch id
 					svcQName": "drag"					// service queue name
-					"nextRetryCount": 3 				// this means the task has been already attempted 2 times and failed. Next retry will be the 3rd attempt.
-					"nextRetryTimestamp": 1234567890 	// the 3rd attempt is scheduled at this timestamp.
+					"next_attempt_number": 3 				// this means the task has been already attempted 2 times and failed. Next retry will be the 3rd attempt.
+					"next_attempt_scheduledstamp": 1234567890 	// the 3rd attempt is scheduled at this timestamp.
 				}
 		RETRY:
 			A task is retried for a specified number of times. This is called the retry count.
 			the next retry timestamp for nth attempt is calculated using the following formula.
-			nextRetryTimestamp = currentEpoch + restingPeriod + ((n-1)*loopBackoff). this calculation is carried out when (n-1)th attempt fails.
+			next_attempt_scheduledstamp = currentEpoch + restingPeriod + ((n-1)*loopBackoff). this calculation is carried out when (n-1)th attempt fails.
 			restingPeriod and loopBackoff are configurable parameters with default value 0. This allows the user to configure the retry mechanism.
 			One can configure the retry mechanism to have a fixed delay between every retry. This can be done by setting loopBackoff to 0.
 			Also, it can be configured so that the weight time between each retries keeps increasing.
@@ -89,8 +89,8 @@ package serviceq
 			1. creating a json of retry task which looks like as follows
 			{
 				"task": {}
-				"nextRetryCount": 3
-				"nextRetryTime": 1234567890
+				"next_attempt_number": 3
+				"next_attempt_scheduled": 1234567890
 			}
 
 			2. pushing the json to the queue for that timestamp. i.e. there exist a queue for each timestamp.
@@ -169,6 +169,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -232,9 +233,12 @@ type ServiceQ struct {
 	endTime       int64  // epoch time when the job was finished (last task was carried out)
 	redis         redis.RedisClient
 	taskFunction  func(interface{}) bool // this function will be called for each task
-	start         chan bool
-	stop          chan bool
-	pause         chan bool
+	workerPostBox map[string]interface{} // [<worker-id>]:{status: RUNNING, processed: 2, failed: 1} // a syncer daemon will listen to res channel and update this map.
+	start         chan bool              // send start signal to the worker
+	stop          chan bool              // send stop signal to the worker
+	pause         chan bool              // send pause signal to the worker
+	req           chan interface{}       // send payload to worker
+	res           chan interface{}       // receive response from worker
 }
 
 // initialize a service queue with default settings
@@ -261,19 +265,40 @@ func NewServiceQ(name string, redisHost string, redisPort string, password ...st
 		s.redis = redis.NewRedis(redisHost, redisPort, password[0], 0)
 	}
 
+	// initialize the worker reports map
+	s.workerPostBox = make(map[string]interface{})
+
 	// initialize the start channel
 	s.start = make(chan bool)
 	s.stop = make(chan bool)
 	s.pause = make(chan bool)
-	// s.SyncUp()
 
-	if s.workerCount > 0 {
-		// start the go routine
-		go worker(s, s.start, s.stop, s.pause)
-	}
+	// initialize the request and response channels
+	s.req = make(chan interface{})
+	s.res = make(chan interface{})
+
+	go syncerDaemon(s)
 
 	// return the object
 	return s, nil
+}
+
+func syncerDaemon(s *ServiceQ) {
+
+	for {
+		select {
+		// when any worker pushes a report, the syncer daemon will receive it and update the workerPostBox of serviceQ
+		case workerReport := <-s.res:
+			workerID := workerReport.(map[string]interface{})["worker_id"].(string)
+			s.workerPostBox[workerID] = workerReport.(map[string]interface{})
+		case <-s.req:
+
+		default:
+			fmt.Println(fmt.Sprint("%v", time.Now().Unix()) + ": " + "Hello from syncer daemon")
+			time.Sleep(10 * time.Second)
+		}
+	}
+
 }
 
 // restore a service queue from redis, by name
@@ -396,7 +421,7 @@ func (s *ServiceQ) SetWorkerConfig(count int, waitingPeriod int, restingPeriod i
 
 	if s.workerCount > 0 {
 		// start the go routine
-		go worker(s, s.start, s.stop, s.pause)
+		// go worker(s, s.start, s.stop, s.pause)
 	}
 
 	// s.SyncUp()
@@ -430,6 +455,10 @@ func (s *ServiceQ) GetBatchInfo() map[string]interface{} {
 	}
 }
 
+func (s *ServiceQ) GetWokerInfo() map[string]interface{} {
+	return s.workerPostBox
+}
+
 func (s *ServiceQ) EnableAutostart() {
 	s.autoStart = true
 	// s.SyncUp()
@@ -447,9 +476,24 @@ func (s *ServiceQ) SetTaskFunction(f func(interface{}) bool) {
 
 func (s *ServiceQ) Start() error {
 
+	// get number or workers running
+	runningWorkerCount := len(s.workerPostBox)
+
 	// if already running, return error
 	if s.status == "RUNNING" {
-		return fmt.Errorf("job is already running")
+		return fmt.Errorf("%v worker(s) already running", runningWorkerCount)
+	}
+
+	// workers need to be created
+	fmt.Println(s.workerCount-runningWorkerCount, " worker(s) will be created")
+	if s.workerCount > runningWorkerCount {
+		workersToCreate := s.workerCount - runningWorkerCount
+		for i := 0; i < workersToCreate; i++ {
+
+			// start the go routine
+			go worker(s, s.start, s.stop, s.pause, s.req, s.res)
+			fmt.Println("worker created")
+		}
 	}
 
 	// send signal to worker to stop
@@ -482,7 +526,27 @@ func (s *ServiceQ) Pause() error {
 	return nil
 }
 
-func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool) {
+func (s *ServiceQ) GetWorkerInfo() map[string]interface{} {
+	// signal work(s) to send their report(s). once the workers send, syncer daemon will update the workerPostBox
+	s.req <- true
+	return s.workerPostBox
+
+}
+
+// this runs in the background
+func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, req chan interface{}, res chan interface{}) {
+
+	// these parameters will be sent to response channel after each task
+	workerParams := map[string]interface{}{}
+	workerParams["created_at"] = time.Now().Unix()
+	workerParams["worker_id"] = fmt.Sprintf("%x", md5.Sum([]byte(strconv.FormatInt(workerParams["created_at"].(int64), 10)))) // auto generate a workerID md5(time.Now().Unix())
+	workerParams["failed_count"] = 0
+	workerParams["success_count"] = 0
+	workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64) // will be calculated at the time of report from start time and current time
+
+	// push the params/reports to the response channel
+
+	res <- workerParams
 
 	for {
 		select {
@@ -527,7 +591,7 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool) {
 				prevChecksum = checksum
 
 				// if the task has a future timestamp, which means its a retry task. and push is back to the que for future execution
-				if int64(taskObj["nextRetryTime"].(float64)) > time.Now().Unix() {
+				if int64(taskObj["next_attempt_scheduled"].(float64)) > time.Now().Unix() {
 					fmt.Println("task has a future timestamp, pushing it back to the queue")
 					continue
 				}
@@ -535,8 +599,8 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool) {
 				// debug
 				fmt.Println("-------------------- current tast ----------------------")
 				fmt.Println("svcQ: ", taskObj["serviceQ"])
-				fmt.Println("nextRetryCount: ", taskObj["nextRetryCount"])
-				fmt.Println("nextRetryTime: ", taskObj["nextRetryTime"])
+				fmt.Println("next_attempt_number: ", taskObj["next_attempt_number"])
+				fmt.Println("next_attempt_scheduled: ", taskObj["next_attempt_scheduled"])
 				fmt.Println("task: ", taskObj["task"])
 
 				// execute the task
@@ -545,11 +609,11 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool) {
 				// if the task operation fails
 				if !taskExecutionStatus {
 					// check if the service queue retry logic configured. and also check if the current task hasn't reached the retry limit. Then scheduled the task for retry
-					if s.retryLimit != 0 && int(taskObj["nextRetryCount"].(float64)) <= s.retryLimit {
-						taskObj["nextRetryCount"] = int(taskObj["nextRetryCount"].(float64)) + 1
-						// nextRetryTimestamp = currentEpoch + restingPeriod + ((n-1)*loopBackoff)
-						delay := int64(s.restingPeriod+15) + int64((taskObj["nextRetryCount"].(int)-1))*int64(s.loopBackoff)
-						taskObj["nextRetryTime"] = time.Now().Unix() + delay
+					if s.retryLimit != 0 && int(taskObj["next_attempt_number"].(float64)) <= s.retryLimit {
+						taskObj["next_attempt_number"] = int(taskObj["next_attempt_number"].(float64)) + 1
+						// next_attempt_scheduledstamp = currentEpoch + restingPeriod + ((n-1)*loopBackoff)
+						delay := int64(s.restingPeriod+15) + int64((taskObj["next_attempt_number"].(int)-1))*int64(s.loopBackoff)
+						taskObj["next_attempt_scheduled"] = time.Now().Unix() + delay
 						// convert map to json ([]byte)
 						taskJson, _ := json.Marshal(taskObj)
 						fmt.Println("(to be resheduled) taskJson: ", string(taskJson))
@@ -560,13 +624,14 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool) {
 					// if the task operation is successful. push the task to the complete queue
 					fmt.Println("task failed, pushing it to the failed queue")
 					s.redis.Push(s.name+"-failed", taskString)
+					workerParams["failed_count"] = workerParams["failed_count"].(int) + 1
 					time.Sleep(time.Duration(s.restingPeriod) * time.Second)
 					continue
 				}
 
 				// if the task operation is successful. push the task to the complete queue
 				s.redis.Push(s.name+"-complete", taskString)
-
+				workerParams["success_count"] = workerParams["success_count"].(int) + 1
 				// sleep for the resting period, between two pop operations
 				fmt.Println("sleeping for ", s.restingPeriod, " seconds")
 				time.Sleep(time.Duration(s.restingPeriod) * time.Second)
@@ -581,13 +646,14 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool) {
 			// move all the pending tasks to the failed queue
 			// update the status to STOPPED
 			return
-
 		case <-pause:
 			s.status = "PAUSED"
 			fmt.Println("pause signal received, pausing serviceQ")
 			for {
 				time.Sleep(1 * time.Second)
 			}
+		case <-req: //this means the worker is requested to send report
+			workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64) // will be calculated at the time of report from start time and current time
 		}
 	}
 }
@@ -601,10 +667,11 @@ func (s *ServiceQ) Push(item interface{}) error {
 
 	// construct the task object
 	task := map[string]interface{}{
-		"task":           item,
-		"serviceQ":       s.name,
-		"nextRetryCount": 0,
-		"nextRetryTime":  0,
+		"task":                   item,
+		"serviceQ":               s.name,
+		"created_at":             time.Now().Unix(),
+		"next_attempt_number":    0,
+		"next_attempt_scheduled": 0,
 	}
 
 	// convert map to json ([]byte)
