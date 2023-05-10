@@ -13,9 +13,11 @@ func main() {
 	r.MaxMultipartMemory = 64 << 20 // 64 megabytes
 	// -------------------------------------- hypd --------------------------------------
 	r.POST("/add", controller.Add)
+	r.POST("/set-worker", controller.SetWorker)
+	r.GET("/status", controller.GetStatusInfo)
+	r.GET("/describe", controller.Describe)
 	r.GET("/start", controller.Start)
 	r.GET("/stop", controller.Stop)
-	r.GET("/status", controller.Status)
 
 	// ------------------------------------- health -------------------------------------
 	r.GET("health", func(c *gin.Context) {
