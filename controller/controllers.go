@@ -68,6 +68,12 @@ func Add(c *gin.Context) {
 	}
 
 	c.AsciiJSON(200, gin.H{"msg": fmt.Sprintf("%d tasks submitted", len(tasks.([]interface{})))})
+
+	config := svcQ.Describe()
+	// if auto start possible then start
+	if config["auto_start"].(bool) && config["worker_count"].(int) > 0 {
+		svcQ.Start() // start all workers
+	}
 }
 
 func Start(c *gin.Context) {

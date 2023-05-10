@@ -834,10 +834,6 @@ func (s *ServiceQ) Push(task interface{}) error {
 	// stringify the json and push to the queue
 	err = s.redis.Push(s.name+"-pending", string(QtaskJson))
 
-	if s.autoStart && s.workerCount > 0 {
-		s.Start() // start all workers
-	}
-
 	if err == nil {
 		s.mu.Lock()
 		s.totalSubmitted++
