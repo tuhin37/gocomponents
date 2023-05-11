@@ -277,8 +277,8 @@ func NewServiceQ(name string, redisHost string, redisPort string, password ...st
 	s.pause = make(chan bool)
 
 	// initialize the data channels
-	s.req = make(chan interface{})
-	s.res = make(chan interface{})
+	s.req = make(chan interface{}, 32) // max number of workere are chosen to be 32
+	s.res = make(chan interface{}, 32)
 
 	// initialize a redis client
 	s.redis = redis.NewRedis(redisHost, redisPort, "", 0)
@@ -490,14 +490,18 @@ func (s *ServiceQ) Start() error {
 		return fmt.Errorf("can not start! no pending tasks")
 	}
 
-	// get number or workers running
+	// get number or workers running, and their IDs
+	alreadyRunningWprkerIds := []string{}
 	s.mu.RLock()
 	runningWorkerCount := len(s.workerPostBox)
+	for id := range s.workerPostBox {
+		alreadyRunningWprkerIds = append(alreadyRunningWprkerIds, id)
+	}
 	s.mu.RUnlock()
 
 	// print how many were already running
 	if s.status == "RUNNING" {
-		return fmt.Errorf("%v worker(s) already running", runningWorkerCount)
+		fmt.Printf("%v worker(s) already running", runningWorkerCount)
 	}
 
 	// workers need to be created (if desired > actual)
@@ -505,16 +509,38 @@ func (s *ServiceQ) Start() error {
 		fmt.Println(s.workerCount-runningWorkerCount, " worker(s) will be created")
 		workersToCreate := s.workerCount - runningWorkerCount
 		for i := 0; i < workersToCreate; i++ {
-			// create a worker
-			go worker(s, s.start, s.stop, s.pause, s.req, s.res)
-			time.Sleep(100 * time.Millisecond)
+			go worker(s, s.start, s.stop, s.pause, s.req, s.res) // create worker(s)
 		}
-		s.mu.RLock()
-		if s.autoStart {
-			s.start <- true // send start signal to all the workes, (will not affect the already running workers)
+
+		// ATP: say desired number of worker(s) are 5, but only 3 are already running. So, 2 new will be created.
+		// Get the ids of the 2 new workers, send them targeted start command
+
+		// wait for all workers to be created
+		for len(s.workerPostBox) < s.workerCount {
+			{
+			}
 		}
-		s.mu.RUnlock()
+
+		// get all worker ids
+		allWorkerIds := []string{}
+		for id := range s.workerPostBox {
+			allWorkerIds = append(allWorkerIds, id)
+		}
+
+		// isolate the newly created worker ids
+		newWorkerIds := StringSliceDifference(allWorkerIds, alreadyRunningWprkerIds)
+
+		// send targeted start command to newly created workers. (only the new workers should start)
+		for _, workerID := range newWorkerIds {
+			req := map[string]string{workerID: "START"}
+			for i := 0; i < s.workerCount*s.workerCount; i++ { // flood, so that all workers get the message
+				fmt.Println("iteration: ", i)
+				s.req <- req
+			}
+		}
 	}
+
+	// workers need to be removed
 	if s.workerCount < runningWorkerCount {
 		fmt.Println(runningWorkerCount-s.workerCount, " worker(s) will be stopped")
 
@@ -531,10 +557,6 @@ func (s *ServiceQ) Start() error {
 			s.req <- workerIdToBeDeleted
 		}
 	}
-
-	// send signal to worker to stop
-	s.start <- true
-
 	return nil
 }
 
@@ -576,162 +598,11 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, req c
 
 	s.mu.Lock()
 	s.workerPostBox[workerParams["id"].(string)] = workerParams
+	runningWorkerCount := len(s.workerPostBox)
 	s.mu.Unlock()
 
 	for {
 		select {
-		case <-start:
-
-			fmt.Println(workerParams["id"], "| ", "start Signal received, starting tasks")
-
-			// check if its the first worker, if yes, then  perform initial formalities. i.e. s.status = "RUNNING"
-			s.mu.Lock()
-			if len(s.workerPostBox) == 1 {
-				// do the exit formalities, i.e. moving Qtasks from pending to failed, send report to mongodb, updating s.status to STOPPED
-				fmt.Println(workerParams["id"], "| ", "I am the first one, fake doing entry formalities")
-				s.status = "RUNNING"
-			}
-			s.mu.Unlock()
-
-			// this is used to detect repeating retry tasks
-			var prevChecksum string
-
-			// sleep for the waiting period
-			fmt.Println(workerParams["id"], " | ", "waiting", s.waitingPeriod, "seconds to start")
-			time.Sleep(time.Duration(s.waitingPeriod) * time.Second)
-
-			// iterate over each task object in the pending queue
-			for {
-				s.mu.RLock()
-				QtaskString, err := s.redis.Pop(s.name + "-pending")
-				s.mu.RUnlock()
-				// check and report if the queue is empty
-				if err != nil {
-					// if queue is empry, break the loop
-					if strings.Trim(err.Error(), "\"") == "redis: nil" {
-						fmt.Println("no Qtask pending")
-						// do exit formalities, i.e. moving Qtasks from pending to failed, send report to mongodb, updating s.status to STOPPED
-						s.mu.Lock()
-						if len(s.workerPostBox) == 1 {
-							fmt.Println(workerParams["id"], "| ", "I am the last one, fake doing exit formalities")
-							s.status = "FINISHED"
-							s.endTime = time.Now().Unix()
-							s.batchDuration = s.endTime - s.startTime
-							// TODO: send report to mongodb
-
-							// delete passed queue
-							// delete failed queue
-
-							// delete the worker from the postbox
-							delete(s.workerPostBox, workerParams["id"].(string))
-							s.mu.Unlock()
-							return
-						}
-						return
-					}
-					// ATP reddis connection issue
-					// TODO
-					return
-				}
-
-				// ATP: a task string is popped from the pending queue
-
-				// deserialize the json string
-				var Qtask map[string]interface{}
-				json.Unmarshal([]byte(QtaskString), &Qtask)
-
-				// calculate the checksum of the task body and compare with the checksum of the previous task. if the checksum is same, that mostly means its retry task with a future timestamp, and its keep getting polled again and again. In that case icrease delay.
-				checksum := calculateMD5(Qtask["task"])
-				if checksum == prevChecksum {
-					fmt.Println("same task again, sleeping for 60 seconds") // TODO make it staggered, loopbackoff
-					time.Sleep(60 * time.Second)
-				}
-
-				// update the prevChecksum
-				prevChecksum = checksum
-
-				// if the task has a future timestamp, which means its a retry task. and push is back to the que for future execution
-				if int64(Qtask["next_attempt_scheduled"].(float64)) > time.Now().Unix() {
-					fmt.Println("task has a future timestamp, pushing it back to the queue")
-					s.mu.Lock()
-					s.redis.Push(s.name+"-pending", QtaskString)
-					continue
-				}
-
-				// // debug
-				// fmt.Println("-------------------- current tast ----------------------")
-				// fmt.Println("svcQ: ", taskObj["serviceQ"])
-				// fmt.Println("next_attempt_number: ", taskObj["next_attempt_number"])
-				// fmt.Println("next_attempt_scheduled: ", taskObj["next_attempt_scheduled"])
-				// fmt.Println("task: ", taskObj["task"])
-
-				// execute the task
-				taskExecutionStatus, remarks := s.taskFunction(Qtask["task"])
-				remarksTokens := strings.Split(remarks, " ")
-				isNoRetry := false
-				if remarksTokens[0] == "NO_RETRY" {
-					isNoRetry = true
-				}
-
-				// if the task operation fails
-				if !taskExecutionStatus {
-					// try scheduling the task for retry
-					// check if the service queue retry logic configured. and also check if the current task hasn't reached the retry limit. Then scheduled the task for retry
-					if !isNoRetry && s.retryLimit != 0 && int(Qtask["next_attempt_number"].(float64)) <= s.retryLimit {
-						Qtask["next_attempt_number"] = int(Qtask["next_attempt_number"].(float64)) + 1
-
-						// next_attempt_scheduled_timestamp = currentEpoch + restingPeriod + ((n-1)*loopBackoff)
-						delay := int64(s.restingPeriod+15) + int64((Qtask["next_attempt_number"].(int)-1))*int64(s.loopBackoff) // TODO: remove the 15 later
-						Qtask["next_attempt_scheduled"] = time.Now().Unix() + delay
-
-						// convert map to json ([]byte)
-						UpdatedQtaskJson, _ := json.Marshal(Qtask)
-						fmt.Println("(to be resheduled) taskJson: ", string(UpdatedQtaskJson))
-
-						// add it back to the pending queue
-						s.redis.Push(s.name+"-pending", string(UpdatedQtaskJson))
-						s.endTime = time.Now().Unix()
-						s.batchDuration = s.endTime - s.startTime
-						continue // task pushed for retry
-					}
-					// ATP: Retry limit reached, push the task to the failed queue
-
-					fmt.Println(workerParams["id"], "| ", "task failed, pushing it to the failed queue")
-
-					Qtask["remarks"] = remarks
-					UpdatedQtaskJson, _ := json.Marshal(Qtask)
-
-					s.redis.Push(s.name+"-failed", string(UpdatedQtaskJson))
-					workerParams["failed_count"] = workerParams["failed_count"].(int) + 1
-					workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64) // will be calculated at the time of report from start time and current time
-					s.mu.Lock()
-					s.workerPostBox[workerParams["id"].(string)] = workerParams
-					s.totalFailed += 1
-					s.endTime = time.Now().Unix()
-					s.batchDuration = s.endTime - s.startTime
-					s.mu.Unlock()
-					time.Sleep(time.Duration(s.restingPeriod) * time.Second)
-					continue // task pushed to failed list
-				}
-
-				// if the task operation is successful. push the task to the complete queue
-				s.redis.Push(s.name+"-passed", QtaskString)
-				workerParams["success_count"] = workerParams["success_count"].(int) + 1
-				workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64) // will be calculated at the time of report from start time and current time
-				s.mu.Lock()
-				s.workerPostBox[workerParams["id"].(string)] = workerParams
-				s.totalPassed += 1
-				s.endTime = time.Now().Unix()
-				s.batchDuration = s.endTime - s.startTime
-				s.mu.Unlock()
-
-				// sleep for the resting period, between two pop operations
-				fmt.Println(workerParams["id"], "| ", "resting for ", s.restingPeriod, " seconds")
-				time.Sleep(time.Duration(s.restingPeriod) * time.Second)
-			}
-
-			// ATP nothing in the pending queue. report and  terminate the worker
-
 		case <-stop:
 			s.status = "STOPPED"
 			fmt.Printf("%v| stop signal received\n", workerParams["id"])
@@ -762,27 +633,163 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, req c
 			s.mu.Unlock()
 		case request := <-req: // request received, generate response and send it back
 			_ = request
-			workerIdToBeDeleted := request.(string)
-			if workerParams["id"] == workerIdToBeDeleted {
-				// check if this is the last worker
-				s.mu.Lock()
-				if len(s.workerPostBox) == 1 {
+			// the workers will get commands like this. {"<worker-id>" : "stop"} or {"<worker-id>" : "pause"} or {"<worker-id>" : "start"}
+			cmd := request.(map[string]string)[workerParams["id"].(string)]
+			if cmd == "START" {
+				fmt.Println(workerParams["id"], "| ", "start Signal received, starting tasks")
+
+				// check if its the first worker, if yes, then  perform initial formalities. i.e. s.status = "RUNNING"
+				if runningWorkerCount == 1 {
 					// do the exit formalities, i.e. moving Qtasks from pending to failed, send report to mongodb, updating s.status to STOPPED
-					fmt.Println(workerParams["id"], "| ", "I am the last one, fake doing exit formalities")
+					fmt.Println(workerParams["id"], "| ", "I am the first one, fake doing entry formalities")
+					s.status = "RUNNING"
+				}
+
+				// this is used to detect repeating retry tasks
+				var prevChecksum string
+
+				// sleep for the waiting period
+				fmt.Println(workerParams["id"], "| ", "waiting", s.waitingPeriod, "seconds to start")
+				time.Sleep(time.Duration(s.waitingPeriod) * time.Second)
+
+				// iterate over each task object in the pending queue
+				for {
+					s.mu.RLock()
+					QtaskString, err := s.redis.Pop(s.name + "-pending")
+					s.mu.RUnlock()
+					// check and report if the queue is empty
+					if err != nil {
+						// if queue is empry, break the loop
+						if strings.Trim(err.Error(), "\"") == "redis: nil" {
+							fmt.Println(workerParams["id"], "| ", "no Qtask pending")
+							// do exit formalities, i.e. moving Qtasks from pending to failed, send report to mongodb, updating s.status to STOPPED
+							s.mu.Lock()
+							runningWorkerCount := len(s.workerPostBox)
+							delete(s.workerPostBox, workerParams["id"].(string))
+							s.mu.Unlock()
+
+							if runningWorkerCount == 1 {
+								fmt.Println(workerParams["id"], "| ", "I am the last one, fake doing exit formalities")
+								fmt.Println(workerParams["id"], "| ", "worker terminated")
+								s.status = "FINISHED"
+								s.endTime = time.Now().Unix()
+								s.batchDuration = s.endTime - s.startTime
+								// TODO: send report to mongodb
+
+								// delete passed queue
+								// delete failed queue
+
+								// delete the worker from the postbox
+								return
+							}
+							fmt.Println(workerParams["id"], "| ", "worker terminated")
+							return
+						}
+						// ATP reddis connection issue
+						// TODO
+						return
+					}
+
+					// ATP: a task string is popped from the pending queue
+
+					// deserialize the json string
+					var Qtask map[string]interface{}
+					json.Unmarshal([]byte(QtaskString), &Qtask)
+
+					// calculate the checksum of the task body and compare with the checksum of the previous task. if the checksum is same, that mostly means its retry task with a future timestamp, and its keep getting polled again and again. In that case icrease delay.
+					checksum := calculateMD5(Qtask["task"])
+					if checksum == prevChecksum {
+						fmt.Println("same task again, sleeping for 60 seconds") // TODO make it staggered, loopbackoff
+						time.Sleep(60 * time.Second)
+					}
+
+					// update the prevChecksum
+					prevChecksum = checksum
+
+					// if the task has a future timestamp, which means its a retry task. and push is back to the que for future execution
+					if int64(Qtask["next_attempt_scheduled"].(float64)) > time.Now().Unix() {
+						fmt.Println("task has a future timestamp, pushing it back to the queue")
+						s.mu.Lock()
+						s.redis.Push(s.name+"-pending", QtaskString)
+						continue
+					}
+
+					// // debug
+					// fmt.Println("-------------------- current tast ----------------------")
+					// fmt.Println("svcQ: ", taskObj["serviceQ"])
+					// fmt.Println("next_attempt_number: ", taskObj["next_attempt_number"])
+					// fmt.Println("next_attempt_scheduled: ", taskObj["next_attempt_scheduled"])
+					// fmt.Println("task: ", taskObj["task"])
+
+					// execute the task
+					taskExecutionStatus, remarks := s.taskFunction(Qtask["task"])
+					remarksTokens := strings.Split(remarks, " ")
+					isNoRetry := false
+					if remarksTokens[0] == "NO_RETRY" {
+						isNoRetry = true
+					}
+
+					// if the task operation fails
+					if !taskExecutionStatus {
+						// try scheduling the task for retry
+						// check if the service queue retry logic configured. and also check if the current task hasn't reached the retry limit. Then scheduled the task for retry
+						if !isNoRetry && s.retryLimit != 0 && int(Qtask["next_attempt_number"].(float64)) <= s.retryLimit {
+							Qtask["next_attempt_number"] = int(Qtask["next_attempt_number"].(float64)) + 1
+
+							// next_attempt_scheduled_timestamp = currentEpoch + restingPeriod + ((n-1)*loopBackoff)
+							delay := int64(s.restingPeriod+15) + int64((Qtask["next_attempt_number"].(int)-1))*int64(s.loopBackoff) // TODO: remove the 15 later
+							Qtask["next_attempt_scheduled"] = time.Now().Unix() + delay
+
+							// convert map to json ([]byte)
+							UpdatedQtaskJson, _ := json.Marshal(Qtask)
+							fmt.Println("(to be resheduled) taskJson: ", string(UpdatedQtaskJson))
+
+							// add it back to the pending queue
+							s.redis.Push(s.name+"-pending", string(UpdatedQtaskJson))
+							s.endTime = time.Now().Unix()
+							s.batchDuration = s.endTime - s.startTime
+							continue // task pushed for retry
+						}
+						// ATP: Retry limit reached, push the task to the failed queue
+
+						fmt.Println(workerParams["id"], "| ", "task failed, pushing it to the failed queue")
+
+						Qtask["remarks"] = remarks
+						UpdatedQtaskJson, _ := json.Marshal(Qtask)
+
+						s.redis.Push(s.name+"-failed", string(UpdatedQtaskJson))
+						workerParams["failed_count"] = workerParams["failed_count"].(int) + 1
+						workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64) // will be calculated at the time of report from start time and current time
+						s.mu.Lock()
+						s.workerPostBox[workerParams["id"].(string)] = workerParams
+						s.totalFailed += 1
+						s.endTime = time.Now().Unix()
+						s.batchDuration = s.endTime - s.startTime
+						s.mu.Unlock()
+						time.Sleep(time.Duration(s.restingPeriod) * time.Second)
+						continue // task pushed to failed list
+					}
+
+					// if the task operation is successful. push the task to the complete queue
+					s.redis.Push(s.name+"-passed", QtaskString)
+					workerParams["success_count"] = workerParams["success_count"].(int) + 1
+					workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64) // will be calculated at the time of report from start time and current time
+					s.mu.Lock()
+					s.workerPostBox[workerParams["id"].(string)] = workerParams
+					s.totalPassed += 1
 					s.endTime = time.Now().Unix()
 					s.batchDuration = s.endTime - s.startTime
-					s.status = "FINISHED"
-				}
-				// delete the worker from the postbox
-				delete(s.workerPostBox, workerParams["id"].(string))
-				s.mu.Unlock()
+					s.mu.Unlock()
 
-				fmt.Println(workerParams["id"], "| ", "deleted")
-				return // kills the worker
+					// sleep for the resting period, between two pop operations
+					fmt.Println(workerParams["id"], "| ", "resting for ", s.restingPeriod, " seconds")
+					time.Sleep(time.Duration(s.restingPeriod) * time.Second)
+				}
 			}
+
 		default:
-			fmt.Println(workerParams["id"], "| ", "worker idle, sleeping for 5 seconds")
-			time.Sleep(5 * time.Second)
+			{
+			}
 		}
 	}
 }
@@ -799,7 +806,6 @@ func (s *ServiceQ) Push(task interface{}) error {
 	}
 
 	// reset batch if the tasl is pushed after previous batch is finished (pending queue is empty)
-	fmt.Println("pendingQLen: ", pendingQLen)
 	if pendingQLen == 0 {
 		// start a new batch
 		s.mu.Lock()
@@ -853,4 +859,24 @@ func calculateMD5(data interface{}) string {
 	}
 	hash := md5.Sum(buffer.Bytes())
 	return hex.EncodeToString(hash[:])
+}
+
+func StringSliceDifference(biggSlice, smallSlice []string) []string {
+	// Create a map to hold the values in smaller slice
+	m := make(map[string]bool)
+	for _, item := range smallSlice {
+		m[item] = true
+	}
+
+	// Create a slice to hold the difference
+	var diff []string
+
+	// Check each item in slice1
+	for _, item := range biggSlice {
+		// If the item is not in the map, add it to the difference slice
+		if _, ok := m[item]; !ok {
+			diff = append(diff, item)
+		}
+	}
+	return diff
 }

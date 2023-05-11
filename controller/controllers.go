@@ -11,7 +11,7 @@ import (
 var svcQ *serviceq.ServiceQ
 
 func task(data interface{}) (bool, string) {
-	fmt.Println("TASK_FUNCTION: ", data)
+	// fmt.Println("TASK_FUNCTION: ", data)
 
 	// if the task fails
 	// return false, "NO_RETRY the user does not have whatsapp number"
