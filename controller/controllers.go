@@ -90,3 +90,13 @@ func Start(c *gin.Context) {
 func Stop(c *gin.Context) {
 	svcQ.Stop()
 }
+
+func Pause(c *gin.Context) {
+	err := svcQ.Pause()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotAcceptable, gin.H{"msg": err.Error()})
+		return
+	}
+
+	c.AsciiJSON(200, svcQ.GetStatusInfo())
+}

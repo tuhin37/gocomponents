@@ -248,11 +248,12 @@ type ServiceQ struct {
 	// ------- custom task function
 	taskFunction func(interface{}) (bool, string) // this function will be called for each task
 	// --------channels
-	start chan bool        // send start signal to the worker
-	stop  chan bool        // send stop signal to the worker
-	pause chan bool        // send pause signal to the worker
-	req   chan interface{} // send payload to worker
-	res   chan interface{} // receive response from worker
+	start  chan bool        // send start signal to the worker
+	stop   chan bool        // send stop signal to the worker
+	pause  chan bool        // send pause signal to the worker
+	resume chan bool        // send resume signal to the worker
+	req    chan interface{} // send payload to worker
+	res    chan interface{} // receive response from worker
 }
 
 // initialize a service queue with default settings
@@ -272,13 +273,14 @@ func NewServiceQ(name string, redisHost string, redisPort string, password ...st
 	s.status = "CREATED"
 
 	// initialize the signal channels
-	s.start = make(chan bool)
-	s.stop = make(chan bool)
-	s.pause = make(chan bool)
+	s.start = make(chan bool, 32*32)
+	s.stop = make(chan bool, 32*32)
+	s.pause = make(chan bool, 32*32)
+	s.resume = make(chan bool)
 
 	// initialize the data channels
-	s.req = make(chan interface{}, 32) // max number of workere are chosen to be 32
-	s.res = make(chan interface{}, 32)
+	s.req = make(chan interface{}, 32*32) // max number of workere are chosen to be 32
+	s.res = make(chan interface{}, 32*32)
 
 	// initialize a redis client
 	s.redis = redis.NewRedis(redisHost, redisPort, "", 0)
@@ -509,7 +511,7 @@ func (s *ServiceQ) Start() error {
 		fmt.Println(s.workerCount-runningWorkerCount, " worker(s) will be created")
 		workersToCreate := s.workerCount - runningWorkerCount
 		for i := 0; i < workersToCreate; i++ {
-			go worker(s, s.start, s.stop, s.pause, s.req, s.res) // create worker(s)
+			go worker(s, s.start, s.stop, s.pause, s.resume, s.req, s.res) // create worker(s)
 		}
 
 		// ATP: say desired number of worker(s) are 5, but only 3 are already running. So, 2 new will be created.
@@ -573,19 +575,43 @@ func (s *ServiceQ) Stop() error {
 }
 
 func (s *ServiceQ) Pause() error {
-	// if already running, return error
 	if s.status != "RUNNING" {
-		return fmt.Errorf("serviceQ can not be paused, it is not running")
+		return fmt.Errorf("can not pause. serviceq was not running")
 	}
 
-	// send signal to worker to pause
-	s.pause <- true
+	if s.status == "PAUSED" {
+		return fmt.Errorf("serviceQ is already paused")
+	}
+
+	pendingTaskCount, _ := s.redis.Qlength(s.name + "-pending")
+	if pendingTaskCount == 0 {
+		return fmt.Errorf("can not start! no pending tasks")
+	}
+
+	s.mu.Lock()
+	s.status = "PAUSED"
+	s.mu.Unlock()
+	// // get number or workers running, and their IDs
+	// alreadyRunningWprkerIds := []string{}
+	// s.mu.RLock()
+	// for id := range s.workerPostBox {
+	// 	alreadyRunningWprkerIds = append(alreadyRunningWprkerIds, id)
+	// }
+	// s.mu.RUnlock()
+
+	// // send pause command
+	// for i := 0; i < len(alreadyRunningWprkerIds); i++ {
+	// 	for i := 0; i < s.workerCount; i++ { // flood, so that all workers get the message
+	// 		fmt.Println("sending pause command")
+	// 		s.pause <- true
+	// 	}
+	// }
 
 	return nil
 }
 
 // this runs in the background
-func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, req chan interface{}, res chan interface{}) {
+func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resume chan bool, req chan interface{}, res chan interface{}) {
 
 	// these parameters will be sent to response channel after each task
 	workerParams := map[string]interface{}{}
@@ -623,14 +649,9 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, req c
 			// send report to mongodb
 
 			return // kills the worker
-		case <-pause:
-			s.status = "PAUSED"
-			fmt.Println("pause signal received, pausing serviceQ")
-			workerParams["status"] = "PAUSED"
-			workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64)
-			s.mu.Lock()
-			s.workerPostBox[workerParams["id"].(string)] = workerParams
-			s.mu.Unlock()
+		case <-pause: // when pased, all should be paused, no targetting needed, thats why using direct bool channel and not the request channel
+			fmt.Println("pause signal received")
+			time.Sleep(5 * time.Second)
 		case request := <-req: // request received, generate response and send it back
 			_ = request
 			// the workers will get commands like this. {"<worker-id>" : "stop"} or {"<worker-id>" : "pause"} or {"<worker-id>" : "start"}
@@ -654,9 +675,18 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, req c
 
 				// iterate over each task object in the pending queue
 				for {
+
+					if s.status == "PAUSED" {
+						fmt.Println(workerParams["id"], "| ", "paused")
+						<-resume
+						fmt.Println("resume signal received")
+
+					}
+					// POP a Qtask
 					s.mu.RLock()
 					QtaskString, err := s.redis.Pop(s.name + "-pending")
 					s.mu.RUnlock()
+
 					// check and report if the queue is empty
 					if err != nil {
 						// if queue is empry, break the loop

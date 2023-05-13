@@ -18,6 +18,7 @@ func main() {
 	r.GET("/describe", controller.Describe)
 	r.GET("/start", controller.Start)
 	r.GET("/stop", controller.Stop)
+	r.GET("/pause", controller.Pause)
 
 	// ------------------------------------- health -------------------------------------
 	r.GET("health", func(c *gin.Context) {
