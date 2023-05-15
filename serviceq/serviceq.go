@@ -398,15 +398,29 @@ func (s *ServiceQ) Describe() map[string]interface{} {
 	}
 }
 
-func (s *ServiceQ) SetWorkerConfig(count int, waitingPeriod int, restingPeriod int) {
+func (s *ServiceQ) SetWorkerConfig(count int, waitingPeriod int, restingPeriod int, autoStart bool) {
+	s.mu.Lock()
+	prevWorkerCount := s.workerCount
+	s.autoStart = autoStart
 	s.workerCount = count
 	s.waitingPeriod = waitingPeriod
 	s.restingPeriod = restingPeriod
+	status := s.status
+	s.mu.Unlock()
 
-	if s.workerCount > 0 && s.autoStart {
+	if count > 0 && autoStart && status == "PENDING" {
 		s.Start()
 	}
 
+	// if a batch has started, then one can scale worker just by updating worker config (irrespective of autoStart)
+	if count == 0 && (status == "RUNNING" || status == "PAUSED") {
+		s.Stop()
+	}
+
+	// check scaleup
+	if count != prevWorkerCount && (status == "RUNNING" || status == "PAUSED") {
+		s.Scale()
+	}
 }
 
 func (s *ServiceQ) SetRetryConfig(retryLimit int, loopBackoff int) {
@@ -467,103 +481,146 @@ func (s *ServiceQ) SetTaskFunction(f func(interface{}) (bool, string)) {
 }
 
 func (s *ServiceQ) Start() error {
+	/*
+		1. only responsible for starting the workers
+		2. this changes s.status from PENDING to RUNNING
+		3. if autostart is set, then PENDING -> RUNNING is autotriggered
+	*/
 
-	// read number of running-workers
+	// read serviceQ state
 	s.mu.RLock()
-	var runningWorkerCount = len(s.workerPostBox)
+	status := s.status
+	desiredWorkerCount := s.workerCount
+	// runningWorkerCount := len(s.workerPostBox)
+	pendingTaskCount, _ := s.redis.Qlength(s.name + "-pending")
 	s.mu.RUnlock()
 
-	// workers need to be removed
-	if s.workerCount < len(s.workerPostBox) {
-		fmt.Println(runningWorkerCount-s.workerCount, " worker(s) will be stopped")
-
-		// get ids of all workers
-		workerIDs := []string{}
-		for id := range s.workerPostBox {
-			workerIDs = append(workerIDs, id)
-		}
-
-		workersToDelete := runningWorkerCount - s.workerCount
-		for i := 0; i < workersToDelete; i++ {
-			workerIdToBeDeleted := workerIDs[i]
-			// send stop command to all worker, whose id matches that worker will be deleted
-			s.mu.Lock()
-			delete(s.workerPostBox, workerIdToBeDeleted)
-			s.mu.Unlock()
-		}
-		return nil
+	// only move forward if in PENDING state
+	if status != "PENDING" {
+		return fmt.Errorf("can not start! service is not in PENDING state")
 	}
 
-	if s.workerCount == 0 {
+	// move forward if desired worker count is more than 0
+	if desiredWorkerCount == 0 {
 		return fmt.Errorf("can not start! worker count is 0")
 	}
 
-	pendingTaskCount, _ := s.redis.Qlength(s.name + "-pending")
+	// move forward if there are pending tasks
 	if pendingTaskCount == 0 {
 		return fmt.Errorf("can not start! no pending tasks")
 	}
 
-	// print how many were already running
-	if s.status == "RUNNING" {
-		fmt.Printf("%v worker(s) already running", runningWorkerCount)
-	}
+	// signal workes to start working
+	s.mu.Lock()
+	s.status = "RUNNING" // the workers poll this value to start working
+	s.mu.Unlock()
 
-	if s.status == "PENDING" {
-		s.status = "START"
-	}
-
-	if s.status == "PAUSED" {
-		s.status = "RUNNING"
-	}
-
-	// workers need to be created (if desired > actual)
-	if s.workerCount > runningWorkerCount {
-		fmt.Println(s.workerCount-runningWorkerCount, " worker(s) will be created")
-		workersToCreate := s.workerCount - runningWorkerCount
-		for i := 0; i < workersToCreate; i++ {
-			go worker(s, s.start, s.stop, s.pause, s.resume, s.req, s.res) // create worker(s)
-		}
-
-		// ATP: say desired number of worker(s) are 5, but only 3 are already running. So, 2 new will be created.
-		// Get the ids of the 2 new workers, send them targeted start command
-
-		// wait for all workers to be created
-		for len(s.workerPostBox) < s.workerCount {
-			{
-			}
-		}
+	// create workers
+	fmt.Println(desiredWorkerCount, " worker(s) is being created")
+	for i := 0; i < desiredWorkerCount; i++ {
+		go worker(s, s.start, s.stop, s.pause, s.resume, s.req, s.res) // create worker(s)
 	}
 
 	return nil
 }
 
 func (s *ServiceQ) Stop() error {
-	// if already running, return error
-	if s.status != "RUNNING" && s.status != "PAUSED" {
-		return fmt.Errorf("serviceQ can not be stopped, it is not running or paused")
+
+	s.mu.RLock()
+	status := s.status
+
+	// allowed state transitions: PENDING, RUNNING, PAUSED -> STOPPED
+	if status != "PENDING" && status != "RUNNING" && status != "PAUSED" {
+		return fmt.Errorf("serviceQ can not be stopped, it is not pending, running or paused state")
 	}
 
+	// signal all workers to kill themselves, the last to die will do the exit formalities. coded in the worker function
 	s.status = "STOPPED"
+	s.mu.RUnlock()
 	return nil
 }
 
 func (s *ServiceQ) Pause() error {
-	if s.status != "RUNNING" {
+	s.mu.RLock()
+	status := s.status
+	s.mu.RUnlock()
+
+	if status != "RUNNING" {
 		return fmt.Errorf("can not pause. serviceq was not running")
 	}
 
-	if s.status == "PAUSED" {
-		return fmt.Errorf("serviceQ is already paused")
-	}
-
-	pendingTaskCount, _ := s.redis.Qlength(s.name + "-pending")
-	if pendingTaskCount == 0 {
-		return fmt.Errorf("can not start! no pending tasks")
-	}
-
+	// signal all workers to pause themselves
 	s.mu.Lock()
 	s.status = "PAUSED"
 	s.mu.Unlock()
+	return nil
+}
+
+func (s *ServiceQ) Resume() error {
+	s.mu.RLock()
+	status := s.status
+	s.mu.RUnlock()
+
+	if status != "PAUSED" {
+		return fmt.Errorf("can not resume. serviceq was not paused")
+	}
+
+	// signal all workers to resume themselves
+	s.mu.Lock()
+	s.status = "RUNNING"
+	s.mu.Unlock()
+
+	return nil
+}
+
+// scale number of workers
+func (s *ServiceQ) Scale() error {
+	/*
+		1. scalling only makes sense when service is in RUNNING or PAUSED state
+		2. if paused and scaled up, then more worker will be created and they will also be in pasued state
+		3. if paused and scaled down, then some worker(s) will be deleted
+		4. if running and scaled up, then more worker will be created and they will also be in running state
+		5. if running and scaled down, then some worker(s) will be deleted
+	*/
+
+	// gather info
+	s.mu.RLock()
+	status := s.status
+	desiredWorkerCount := s.workerCount
+	runningWorkerCount := len(s.workerPostBox)
+	s.mu.RUnlock()
+
+	if status != "RUNNING" && status != "PAUSED" {
+		return fmt.Errorf("can not scale. serviceq needs to be in RUNNING or PAUSED state")
+	}
+
+	// scale up
+	if desiredWorkerCount > runningWorkerCount {
+		workersToCreate := desiredWorkerCount - runningWorkerCount
+		for i := 0; i < workersToCreate; i++ {
+			go worker(s, s.start, s.stop, s.pause, s.resume, s.req, s.res) // create worker(s)
+		}
+	}
+
+	// get all the worker ids
+	var workerIDs []string
+	s.mu.RLock()
+	for workerID, _ := range s.workerPostBox {
+		workerIDs = append(workerIDs, workerID)
+	}
+	s.mu.RUnlock()
+
+	// scale down
+	if desiredWorkerCount < runningWorkerCount {
+		workersToKill := runningWorkerCount - desiredWorkerCount
+		for i := 0; i < workersToKill; i++ {
+			workerID := workerIDs[i]
+			s.mu.Lock()
+			delete(s.workerPostBox, workerID) // aks the workers to commit cuicide, make sure worker can die while in paused
+			s.mu.Unlock()
+		}
+	}
+
 	return nil
 }
 
@@ -606,13 +663,12 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 			workerLOG(&workerParams, "i'm the first one. doing start formalities")
 			workerEntryFormalities(&workerParams, s) // system level formalities
 			// entryFormalitiesUser(&workerParams, s) TODO execute user defined start formalities
-
-			// sleep for the waiting period
-			workerLOG(&workerParams, "waiting for "+strconv.Itoa(s.waitingPeriod)+" seconds before starting")
-			time.Sleep(time.Duration(s.waitingPeriod) * time.Second)
 		}
 
 		if svcqStatus == "RUNNING" {
+			// sleep for the waiting period
+			workerLOG(&workerParams, "waiting for "+strconv.Itoa(s.waitingPeriod)+" seconds before starting")
+			time.Sleep(time.Duration(s.waitingPeriod) * time.Second)
 			for {
 
 				// check every pop, if ststus is still "RUNNING". it could mutate in "PAUSED" or "STOPPED" or "FINISHED"
@@ -622,8 +678,21 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 
 				// check mailbox before every pop, if the worker is deleted from the mailbox, then the worker commits cuicide
 				if _, ok := s.workerPostBox[workerParams["id"].(string)]; !ok {
-					workerLOG(&workerParams, "killed")
-					return // commit cuiicide
+					s.mu.Lock()
+					runningWorkerCount := len(s.workerPostBox)
+					s.mu.Unlock()
+
+					// if this is the last worker, do the exit formalities
+					if runningWorkerCount == 0 {
+						workerLOG(&workerParams, "i am the last one. doing exit formalities")
+						workerExitFormalities(&workerParams, s)
+						// s.exitFormalitiesCallback() // TODO
+						workerLOG(&workerParams, "worker killed")
+						return // kill this worker, if this is the last worker
+					}
+
+					workerLOG(&workerParams, "worker killed")
+					return // kill this worker
 				}
 
 				// POP a Qtask
@@ -806,10 +875,11 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 				workerLOG(&workerParams, "i am the last one. doing exit formalities")
 				workerExitFormalities(&workerParams, s)
 				// s.exitFormalitiesCallback() // TODO
+				workerLOG(&workerParams, "worker killed")
 				return // kill this worker, if this is the last worker
 			}
 
-			workerLOG(&workerParams, "worker stopped")
+			workerLOG(&workerParams, "worker killed")
 			return // kill this worker
 		}
 	}
@@ -835,6 +905,7 @@ func workerHandlePopFailure(workerParams *map[string]interface{}, s *ServiceQ, e
 			workerLOG(workerParams, "i am the last one. doing exit formalities")
 			workerExitFormalities(workerParams, s)
 			// s.exitFormalitiesCallback() // TODO
+			workerLOG(workerParams, "worker terminated")
 			return // kill this worker
 		}
 		workerLOG(workerParams, "worker terminated")
@@ -861,15 +932,12 @@ func workerExitFormalities(workerParams *map[string]interface{}, s *ServiceQ) {
 	s.mu.Lock()
 	s.endTime = time.Now().Unix()
 	s.batchDuration = s.endTime - s.startTime
-	s.mu.Unlock()
+
 	if s.status == "RUNNING" {
 		s.status = "FINISHED"
-		workerLOG(workerParams, "worker terminated")
 		return
 	}
-
-	// in case the serviceQ is stopped
-	workerLOG(workerParams, "worker stopped")
+	s.mu.Unlock()
 }
 
 func workerLOG(workerParams *map[string]interface{}, log string) {

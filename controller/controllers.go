@@ -22,7 +22,7 @@ func task(data interface{}) (bool, string) {
 func init() {
 	svcQ, _ = serviceq.NewServiceQ("drag", "localhost", "6379", "")
 	svcQ.DisableAutostart()
-	svcQ.SetWorkerConfig(0, 1, 2)
+	svcQ.SetWorkerConfig(0, 1, 2, false)
 	svcQ.SetRetryConfig(5, 3)
 	svcQ.SetTaskFunction(task)
 	fmt.Println(svcQ.Describe())
@@ -37,20 +37,22 @@ func Describe(c *gin.Context) {
 }
 
 func SetWorker(c *gin.Context) {
+	// read post request body into a map
 	var workerConfig map[string]interface{}
 	c.BindJSON(&workerConfig)
 
+	// extract worker config from map
 	workerCount := int(workerConfig["worker_count"].(float64))
 	waitingPeriod := int(workerConfig["waiting_period"].(float64))
 	restingPeriod := int(workerConfig["resting_period"].(float64))
-	isAutoStart := workerConfig["auto_start"].(bool)
+	AutoStart := workerConfig["auto_start"].(bool)
 
-	svcQ.SetWorkerConfig(workerCount, waitingPeriod, restingPeriod)
-	if isAutoStart {
-		svcQ.EnableAutostart()
-	} else {
-		svcQ.DisableAutostart()
-	}
+	// set worker config
+	svcQ.SetWorkerConfig(workerCount, waitingPeriod, restingPeriod, AutoStart)
+
+	// scale workers if auto start
+
+	// return updated config
 	c.AsciiJSON(200, svcQ.Describe())
 }
 
@@ -84,11 +86,16 @@ func Start(c *gin.Context) {
 	}
 
 	c.AsciiJSON(200, svcQ.GetStatusInfo())
-
 }
 
 func Stop(c *gin.Context) {
-	svcQ.Stop()
+	err := svcQ.Stop()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotAcceptable, gin.H{"msg": err.Error()})
+		return
+	}
+
+	c.AsciiJSON(200, svcQ.GetStatusInfo())
 }
 
 func Pause(c *gin.Context) {
