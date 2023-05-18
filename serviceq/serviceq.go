@@ -222,8 +222,9 @@ import (
 
 type ServiceQ struct {
 	//---------- identity
-	id   string // unique id of the service queue. when replicas are present
-	name string // name of the service queue
+	id       string // unique id of the service queue. when replicas are present
+	name     string // name of the service queue
+	isSilent bool   // if true, then the service queue will not log anything
 	// ------- worker
 	workerCount   int                    // number of workers, that be consuming the queue and carrying out the tasks
 	autoStart     bool                   // if true, the worker will start automatically 'waitingPeriod' seconds after the first task is added to the queue
@@ -246,7 +247,11 @@ type ServiceQ struct {
 	// ------- redis client
 	redis redis.RedisClient // redis client
 	// ------- custom task function
-	taskFunction func(interface{}) (bool, string) // this function will be called for each task
+	taskFunction             func(interface{}) (bool, string) // this function will be called for each task
+	batchEndCallback         func(map[string]interface{})     // this function will be called for each time a batch is complete
+	batchBeginCallback       func(map[string]interface{})     // this function will be called for each time a batch starts
+	workerPushUpdateCallback func(map[string]interface{})     // this function will be called for each time a worker completes a task
+
 	// --------channels
 	start  chan bool        // send start signal to the worker
 	stop   chan bool        // send stop signal to the worker
@@ -263,8 +268,9 @@ func NewServiceQ(name string, redisHost string, redisPort string, password ...st
 
 	s.startTime = time.Now().Unix()
 
-	s.id = hex.EncodeToString([]byte(fmt.Sprintf("%v", s.startTime) + s.name)[:]) // md5 (current_epoch + name)
+	s.id = calculateMD5([]byte(fmt.Sprintf("%v", s.startTime) + s.name)[:]) // md5 (current_epoch + name)
 	s.name = name
+	s.isSilent = true
 
 	s.workerCount = 1
 	s.autoStart = true // if true consumer will start automatically, else will have to start manually
@@ -475,9 +481,34 @@ func (s *ServiceQ) DisableAutostart() {
 	// s.SyncUp()
 }
 
+func (s *ServiceQ) Verbose() {
+	s.isSilent = false
+	// s.SyncUp()
+}
+
+func (s *ServiceQ) Silent() {
+	s.isSilent = true
+	// s.SyncUp()
+}
+
 // ------------------ worker operations ------------------
 func (s *ServiceQ) SetTaskFunction(f func(interface{}) (bool, string)) {
 	s.taskFunction = f
+}
+
+// this callback funbction gets called everytime a batch completes.
+func (s *ServiceQ) SetBatchEndCallback(f func(map[string]interface{})) {
+	s.batchEndCallback = f
+}
+
+// this callback function is called when the first worker starts processing the batch (could be help full if workers are scheduled at a future time)
+func (s *ServiceQ) SetBatchBeginCallback(f func(map[string]interface{})) {
+	s.batchBeginCallback = f
+}
+
+// gets called everytime a worker pushes update to the postbox
+func (s *ServiceQ) SetWorkerPushUpdateCallback(f func(map[string]interface{})) {
+	s.workerPushUpdateCallback = f
 }
 
 func (s *ServiceQ) Start() error {
@@ -512,7 +543,7 @@ func (s *ServiceQ) Start() error {
 
 	// signal workes to start working
 	s.mu.Lock()
-	s.status = "RUNNING" // the workers poll this value to start working
+	s.status = "START" // the workers poll this value to start working
 	s.mu.Unlock()
 
 	// create workers
@@ -660,14 +691,14 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 			s.mu.Lock()
 			s.status = "RUNNING"
 			s.mu.Unlock()
-			workerLOG(&workerParams, "i'm the first one. doing start formalities")
-			workerEntryFormalities(&workerParams, s) // system level formalities
-			// entryFormalitiesUser(&workerParams, s) TODO execute user defined start formalities
+			workerLOG(&workerParams, s, "i'm the first one. doing start formalities")
+			batchBeginReport := workerEntryFormalities(&workerParams, s) // system level formalities
+			s.batchBeginCallback(batchBeginReport)                       // call user function if set
 		}
 
 		if svcqStatus == "RUNNING" {
 			// sleep for the waiting period
-			workerLOG(&workerParams, "waiting for "+strconv.Itoa(s.waitingPeriod)+" seconds before starting")
+			workerLOG(&workerParams, s, "waiting for "+strconv.Itoa(s.waitingPeriod)+" seconds before starting")
 			time.Sleep(time.Duration(s.waitingPeriod) * time.Second)
 			for {
 
@@ -684,14 +715,14 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 
 					// if this is the last worker, do the exit formalities
 					if runningWorkerCount == 0 {
-						workerLOG(&workerParams, "i am the last one. doing exit formalities")
+						workerLOG(&workerParams, s, "i am the last one. doing exit formalities")
 						workerExitFormalities(&workerParams, s)
 						// s.exitFormalitiesCallback() // TODO
-						workerLOG(&workerParams, "worker killed")
+						workerLOG(&workerParams, s, "worker killed")
 						return // kill this worker, if this is the last worker
 					}
 
-					workerLOG(&workerParams, "worker killed")
+					workerLOG(&workerParams, s, "worker killed")
 					return // kill this worker
 				}
 
@@ -716,7 +747,7 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 				*/
 				currChecksum := calculateMD5(Qtask["task"])
 				if currChecksum == prevChecksum {
-					workerLOG(&workerParams, "popped the same Qtask again. delaying "+strconv.Itoa(samePopLoopBackOffDelay)+" seconds loopbackoff")
+					workerLOG(&workerParams, s, "popped the same Qtask again. delaying "+strconv.Itoa(samePopLoopBackOffDelay)+" seconds loopbackoff")
 					time.Sleep(time.Duration(samePopLoopBackOffDelay) * time.Second)
 					samePopLoopBackOffDelay += samePopLoopBackOffDelay // next time the delay will increase
 					if samePopLoopBackOffDelay > 60 {                  // cap it to 1 minute max
@@ -731,7 +762,7 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 
 				// if the task has a future timestamp, which means its a retry task. and push is back to the que for future execution
 				if int64(Qtask["next_attempt_scheduled"].(float64)) > time.Now().Unix() {
-					workerLOG(&workerParams, "retry task has a future timestamp: "+strconv.Itoa(int(Qtask["next_attempt_scheduled"].(float64)))+" re-adding to pending queue")
+					workerLOG(&workerParams, s, "retry task has a future timestamp: "+strconv.Itoa(int(Qtask["next_attempt_scheduled"].(float64)))+" re-adding to pending queue")
 					s.mu.Lock()
 					s.redis.Push(s.name+"-pending", QtaskString)
 					s.mu.Unlock()
@@ -780,7 +811,7 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 					}
 
 					// ATP: Retry limit reached, push the task to the failed queue
-					workerLOG(&workerParams, "retry limit reached, pushing the task to failed queue")
+					workerLOG(&workerParams, s, "retry limit reached, pushing the task to failed queue")
 
 					// Process Qtask object before pushng it to the failed queue - for better reporting
 					lastRetryAttempt := Qtask["next_attempt_number"].(int) - 1
@@ -803,6 +834,7 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 					workerParams["status"] = "RUNNING"
 					s.mu.Lock()
 					s.workerPostBox[workerParams["id"].(string)] = workerParams
+					s.workerPushUpdateCallback(workerParams) // send to user defined function
 					s.totalFailed += 1
 					s.endTime = time.Now().Unix()
 					s.batchDuration = s.endTime - s.startTime
@@ -833,24 +865,26 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 				workerParams["status"] = "RUNNING"
 				s.mu.Lock()
 				s.workerPostBox[workerParams["id"].(string)] = workerParams
+				s.workerPushUpdateCallback(workerParams) // send to user defined function
 				s.totalPassed += 1
 				s.endTime = time.Now().Unix()
 				s.batchDuration = s.endTime - s.startTime
 				s.mu.Unlock()
 
 				// sleep for the resting period, between two pop operations
-				workerLOG(&workerParams, "sleeping for resting period of "+strconv.Itoa(s.restingPeriod)+" seconds")
+				workerLOG(&workerParams, s, "sleeping for resting period of "+strconv.Itoa(s.restingPeriod)+" seconds")
 				time.Sleep(time.Duration(s.restingPeriod) * time.Second)
 			}
 		}
 
 		if svcqStatus == "PAUSED" {
-			workerLOG(&workerParams, "worker is paused")
+			workerLOG(&workerParams, s, "worker is paused")
 			// worker push updated report to the postbox
 			workerParams["uptime"] = time.Now().Unix() - workerParams["created_at"].(int64) // will be calculated at the time of report from start time and current time
 			workerParams["status"] = "PAUSED"
 			s.mu.Lock()
 			s.workerPostBox[workerParams["id"].(string)] = workerParams
+			s.workerPushUpdateCallback(workerParams) // send to user defined function
 			s.totalFailed += 1
 			s.endTime = time.Now().Unix()
 			s.batchDuration = s.endTime - s.startTime
@@ -872,14 +906,14 @@ func worker(s *ServiceQ, start chan bool, stop chan bool, pause chan bool, resum
 
 			// if this is the last worker, do the exit formalities
 			if runningWorkerCount == 1 {
-				workerLOG(&workerParams, "i am the last one. doing exit formalities")
-				workerExitFormalities(&workerParams, s)
-				// s.exitFormalitiesCallback() // TODO
-				workerLOG(&workerParams, "worker killed")
+				workerLOG(&workerParams, s, "i am the last one. doing exit formalities")
+				batchEndReport := workerExitFormalities(&workerParams, s)
+				s.batchEndCallback(batchEndReport) // send to user defined function
+				workerLOG(&workerParams, s, "worker killed")
 				return // kill this worker, if this is the last worker
 			}
 
-			workerLOG(&workerParams, "worker killed")
+			workerLOG(&workerParams, s, "worker killed")
 			return // kill this worker
 		}
 	}
@@ -895,52 +929,129 @@ func workerHandlePopFailure(workerParams *map[string]interface{}, s *ServiceQ, e
 	6. if the pop operation has failed for some other reason, then kill the worker with the error message
 	*/
 	if strings.Trim(err.Error(), "\"") == "redis: nil" {
-		workerLOG(workerParams, "no Qtask pending") // do exit formalities, i.e. moving Qtasks from pending to failed, send report to mongodb, updating s.status to STOPPED
+		workerLOG(workerParams, s, "no Qtask pending") // do exit formalities, i.e. moving Qtasks from pending to failed, send report to mongodb, updating s.status to STOPPED
 		s.mu.Lock()
 		runningWorkerCount := len(s.workerPostBox)
 		delete(s.workerPostBox, (*workerParams)["id"].(string))
 		s.mu.Unlock()
 
 		if runningWorkerCount == 1 {
-			workerLOG(workerParams, "i am the last one. doing exit formalities")
-			workerExitFormalities(workerParams, s)
-			// s.exitFormalitiesCallback() // TODO
-			workerLOG(workerParams, "worker terminated")
+			workerLOG(workerParams, s, "i am the last one. doing exit formalities")
+			batchReport := workerExitFormalities(workerParams, s)
+			s.batchEndCallback(batchReport) // send to user defined function
+			workerLOG(workerParams, s, "worker terminated")
 			return // kill this worker
 		}
-		workerLOG(workerParams, "worker terminated")
+		workerLOG(workerParams, s, "worker terminated")
 		return
 	}
 
 	// if the pop failed for some other reason, e.g. redis connection error, kill with the error msg
-	workerLOG(workerParams, "worker terminated! pop failed with error: "+err.Error())
+	workerLOG(workerParams, s, "worker terminated! pop failed with error: "+err.Error())
 }
 
-func workerEntryFormalities(workerParams *map[string]interface{}, s *ServiceQ) {
+func workerEntryFormalities(workerParams *map[string]interface{}, s *ServiceQ) map[string]interface{} {
 	// doing the entry formalities
-	workerLOG(workerParams, "example entry formality task")
+	workerLOG(workerParams, s, "example entry formality task")
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.endTime = time.Now().Unix()
+	s.batchDuration = s.endTime - s.startTime
+
+	// return batch report
+	return map[string]interface{}{
+		"serviceq_id":     s.id,
+		"serviceq_name":   s.name,
+		"status":          s.status,
+		"batch_id":        s.batchID,
+		"total_submitted": s.totalSubmitted,
+		"total_pending":   s.totalSubmitted - s.totalFailed - s.totalPassed,
+		"total_success":   s.totalPassed,
+		"total_failed":    s.totalFailed,
+		"start_time":      s.startTime,
+		"end_time":        s.endTime,
+		"batch_duration":  s.batchDuration,
+		"passed_tasks":    []interface{}{},
+		"failed_tasks":    []interface{}{},
+		"pending_tasks":   []interface{}{},
+	}
+
 }
 
-func workerExitFormalities(workerParams *map[string]interface{}, s *ServiceQ) {
+func workerExitFormalities(workerParams *map[string]interface{}, s *ServiceQ) map[string]interface{} {
 	// doing the entry formalities
-	workerLOG(workerParams, "example exit formality task")
+	workerLOG(workerParams, s, "example exit formality task")
 	// TODO:
 	// TODO: send report to mongodb (move it to user defined exit formalities, a.k.a batch report)
 	// delete passed queue
 	// delete failed queue
 
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.endTime = time.Now().Unix()
 	s.batchDuration = s.endTime - s.startTime
 
+	// get all the pending Qtasks (in case of force stopped or retry failed tasks)
+	var pendingQtasks []interface{}
+	var pendingQtaskStr string
+	var pendingQtask map[string]interface{}
+	totalPendingCount, _ := s.redis.Qlength(s.name + "-pending")
+	for i := int64(0); i < totalPendingCount; i++ {
+		pendingQtaskStr, _ = s.redis.Pop(s.name + "-pending")
+		json.Unmarshal([]byte(pendingQtaskStr), &pendingQtask)
+		pendingQtasks = append(pendingQtasks, pendingQtask)
+	}
+
+	// get all Qtasks from the passed lists
+	var passedQtasks []interface{}
+	var passQtaskStr string
+	var passedQtask map[string]interface{}
+	totalPAssedCount, _ := s.redis.Qlength(s.name + "-passed")
+	for i := int64(0); i < totalPAssedCount; i++ {
+		passQtaskStr, _ = s.redis.Pop(s.name + "-passed")
+		json.Unmarshal([]byte(passQtaskStr), &passedQtask)
+		passedQtasks = append(passedQtasks, passedQtask)
+	}
+
+	// get all Qtasks from the failed lists
+	var failedQtasks []interface{}
+	var failedQtaskStr string
+	var failedQtask map[string]interface{}
+	totalFailedCount, _ := s.redis.Qlength(s.name + "-failed")
+	for i := int64(0); i < totalFailedCount; i++ {
+		failedQtaskStr, _ = s.redis.Pop(s.name + "-failed")
+		json.Unmarshal([]byte(failedQtaskStr), &failedQtask)
+		failedQtasks = append(failedQtasks, failedQtask)
+	}
+
 	if s.status == "RUNNING" {
 		s.status = "FINISHED"
-		return
 	}
-	s.mu.Unlock()
+
+	// return batch report
+	return map[string]interface{}{
+		"serviceq_id":     s.id,
+		"serviceq_name":   s.name,
+		"status":          s.status,
+		"batch_id":        s.batchID,
+		"total_submitted": s.totalSubmitted,
+		"total_pending":   s.totalSubmitted - s.totalFailed - s.totalPassed,
+		"total_success":   s.totalPassed,
+		"total_failed":    s.totalFailed,
+		"start_time":      s.startTime,
+		"end_time":        s.endTime,
+		"batch_duration":  s.batchDuration,
+		"passed_tasks":    passedQtasks,
+		"failed_tasks":    failedQtasks,
+		"pending_tasks":   pendingQtasks,
+	}
 }
 
-func workerLOG(workerParams *map[string]interface{}, log string) {
+func workerLOG(workerParams *map[string]interface{}, s *ServiceQ, log string) {
+	if s.isSilent {
+		return
+	}
 	fmt.Println(time.Now().Unix(), " | ", (*workerParams)["id"].(string), " | ", log)
 }
 

@@ -16,7 +16,23 @@ func task(data interface{}) (bool, string) {
 	// if the task fails
 	// return false, "NO_RETRY the user does not have whatsapp number"
 
-	return true, "success"
+	return true, "SUCCESS | the task was successful"
+}
+
+// print the batch report
+func batchEndCallback(report map[string]interface{}) {
+	fmt.Println("------------------------ batch finished ------------------------")
+	fmt.Println(report)
+}
+
+func batchBeginCallback(report map[string]interface{}) {
+	fmt.Println("------------------------ batch begin ------------------------")
+	fmt.Println(report)
+}
+
+func workerPushUpdate(update map[string]interface{}) {
+	fmt.Println("------------------------ worker push update ------------------------")
+	fmt.Println("workerPushUpdate: ", update)
 }
 
 func init() {
@@ -24,12 +40,15 @@ func init() {
 	svcQ.DisableAutostart()
 	svcQ.SetWorkerConfig(0, 1, 2, false)
 	svcQ.SetRetryConfig(5, 3)
+	svcQ.Verbose()
+
 	svcQ.SetTaskFunction(task)
+	svcQ.SetBatchEndCallback(batchEndCallback)
+	svcQ.SetBatchBeginCallback(batchBeginCallback)
+	svcQ.SetWorkerPushUpdateCallback(workerPushUpdate)
+
 	fmt.Println(svcQ.Describe())
 
-	// 	svcQ.Start()
-
-	// // svcQ.Push(map[string]interface{}{"name": "tuhin", "age": 30, "address": "Bangalore"})
 }
 
 func Describe(c *gin.Context) {
