@@ -1,0 +1,194 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/tuhin37/gocomponents/serviceq"
+)
+
+func main() {
+	r := gin.Default()
+	r.MaxMultipartMemory = 64 << 20 // 64 megabytes
+	// -------------------------------------- hypd --------------------------------------
+	r.POST("/add", Add)
+	r.POST("/set-worker", SetWorker)
+	r.GET("/status", GetStatusInfo)
+	r.GET("/describe", Describe)
+	r.GET("/start", Start)
+	r.GET("/stop", Stop)
+	r.GET("/pause", Pause)
+	r.GET("/resume", Resume)
+
+	// ------------------------------------- health -------------------------------------
+	r.GET("health", func(c *gin.Context) {
+		c.AsciiJSON(http.StatusOK, gin.H{
+			"service": "drag-test",
+			"version": "1.0.6",
+		})
+	})
+
+	// r.GET("/trigger", consumer.ConsumeAndInvite)
+	r.Run(":5000")
+}
+
+// ------------------------------------- controller -------------------------------------
+
+// instantiate a serviceQ
+var svcQ *serviceq.ServiceQ
+
+var I int = 0 // used so that Tuhin4 can be retried exactly 3 times
+
+// every task is execuited here
+func task(data interface{}) (bool, string) {
+	// Tuhin2 will not be retried
+	if data.(map[string]interface{})["name"].(string) == "Tuhin3" {
+		return false, "NO_RETRY | user do not have whatsapp number"
+	}
+
+	//  Tuhin4 will work on 3rd retry
+	if data.(map[string]interface{})["name"].(string) == "Tuhin4" {
+		if I == 3 {
+			return true, "SUCCESS | the task was finally successful"
+		}
+		I += 1
+		return false, "RETRY | send for retry"
+	}
+
+	//  Tuhin6 will never pass after all the retries
+	if data.(map[string]interface{})["name"].(string) == "Tuhin6" {
+		return false, "RETRY | send for retry"
+	}
+
+	// rest all will be passed on the first attempt
+	return true, "SUCCESS | the task was successful"
+}
+
+// gets called when a bitch finishes. It will have detailed batch report
+func batchEndCallback(report map[string]interface{}) {
+	fmt.Println("------------------------ batch finished ------------------------")
+	fmt.Println(report)
+}
+
+// gets called at the begining of a batch. Useful for emmiting event
+func batchBeginCallback(report map[string]interface{}) {
+	// fmt.Println("------------------------ batch begin ------------------------")
+	// fmt.Println(report)
+}
+
+// gets called everytime a worker finishes a Qtask. UpdateCounts and the Qtask object is made available in the scope. Useful to take action even before the entire batch completes
+func workerPushUpdate(update map[string]interface{}, Qtask map[string]interface{}) {
+	// fmt.Println("------------------------ worker push update ------------------------")
+	// fmt.Println("workerPushUpdate: ", update)
+	// fmt.Println("Qtask: ", Qtask)
+}
+
+// initialize the serviceQ with some default values
+func init() {
+	svcQ, _ = serviceq.NewServiceQ("drag", "localhost", "6379", "") // serviceQ name is drag, redis running in loclahost:6379, no password
+	svcQ.DisableAutostart()
+	svcQ.SetWorkerConfig(0, 1, 2, false) // 0 workers, 1 second waiting period, 2 second resting period, no auto start
+	svcQ.SetRetryConfig(4, 3)            // 4 retries, 3 seconds between retries
+	svcQ.Verbose()                       // enable verbose logging
+
+	// set callbacks
+	svcQ.SetTaskFunction(task)
+	svcQ.SetBatchEndCallback(batchEndCallback)
+	svcQ.SetBatchBeginCallback(batchBeginCallback)
+	svcQ.SetWorkerPushUpdateCallback(workerPushUpdate)
+}
+
+// get the config of the serviceQ
+func Describe(c *gin.Context) {
+	c.AsciiJSON(200, svcQ.Describe())
+}
+
+// set worker configs
+func SetWorker(c *gin.Context) {
+	// read post request body into a map
+	var workerConfig map[string]interface{}
+	c.BindJSON(&workerConfig)
+
+	// extract worker config from map
+	workerCount := int(workerConfig["worker_count"].(float64))
+	waitingPeriod := int(workerConfig["waiting_period"].(float64))
+	restingPeriod := int(workerConfig["resting_period"].(float64))
+	AutoStart := workerConfig["auto_start"].(bool)
+
+	// set worker config
+	svcQ.SetWorkerConfig(workerCount, waitingPeriod, restingPeriod, AutoStart)
+
+	// scale workers if auto start
+
+	// return updated config
+	c.AsciiJSON(200, svcQ.Describe())
+}
+
+// set batch status
+func GetStatusInfo(c *gin.Context) {
+	c.AsciiJSON(200, svcQ.GetStatusInfo())
+}
+
+// add tasks to the serviceQ
+func Add(c *gin.Context) {
+	var tasks interface{}
+
+	c.BindJSON(&tasks)
+
+	for _, task := range tasks.([]interface{}) {
+		svcQ.Push(task)
+	}
+
+	c.AsciiJSON(200, gin.H{"msg": fmt.Sprintf("%d tasks submitted", len(tasks.([]interface{})))})
+
+	config := svcQ.Describe()
+	// if auto start possible then start
+	if config["auto_start"].(bool) && config["worker_count"].(int) > 0 {
+		svcQ.Start() // start all workers
+	}
+}
+
+// manually start the serviceQ, is auto start is disabled
+func Start(c *gin.Context) {
+	err := svcQ.Start()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotAcceptable, gin.H{"msg": err.Error()})
+		return
+	}
+
+	c.AsciiJSON(200, svcQ.GetStatusInfo())
+}
+
+// force stop the serviceQ
+func Stop(c *gin.Context) {
+	err := svcQ.Stop()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotAcceptable, gin.H{"msg": err.Error()})
+		return
+	}
+
+	c.AsciiJSON(200, svcQ.GetStatusInfo())
+}
+
+// pause the serviceQ
+func Pause(c *gin.Context) {
+	err := svcQ.Pause()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotAcceptable, gin.H{"msg": err.Error()})
+		return
+	}
+
+	c.AsciiJSON(200, svcQ.GetStatusInfo())
+}
+
+// resume the service
+func Resume(c *gin.Context) {
+	err := svcQ.Resume()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotAcceptable, gin.H{"msg": err.Error()})
+		return
+	}
+
+	c.AsciiJSON(200, svcQ.GetStatusInfo())
+}
