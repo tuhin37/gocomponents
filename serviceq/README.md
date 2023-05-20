@@ -169,8 +169,6 @@ A batch is created when the first task added to an empty `pending` queue. This i
   
   - *FINISHED*
 
-- 
-
 - `totalSubmitted` - This is an auto generated number. This counts the total number of Qtasks that are pushed in the current batch
 
 - `totalPassed` - This is an auto generated number. This counts the total number of Qtasks that were passed in the current batch.
