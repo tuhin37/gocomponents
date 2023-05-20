@@ -203,69 +203,354 @@ A batch is created when the first task added to an empty `pending` queue. This i
 
 The methods are divided in the following catagories
 
-##### 4.1 Instantiation
+##### 4.1. Instantiation
 
 - `NewServiceQ()` - constructor function. Instantiates a new serviceQ object
 
 - `Delete()` - method. Deletes the object and clear redis
 
-#### 4.2 Set configurations
+#### 4.2. Set configurations
 
-- `SetWorkerConfig()`
+- `SetWorkerConfig()` - configure worker settings
 
-- `SetRetryConfig()`
+- `SetRetryConfig()` - configure retry logic
 
-- `Verbose()`
+- `Verbose()` - enable verbose logging on stdout
 
-- `Silent()`
+- `Silent()` - supress all logging
 
-#### 4.3 Get configurations
+#### 4.3. Get configurations
 
-- `GetStatus()`
+- `GetStatus()` - Get serviceQ status. (*CREATED* | *PENDING* | *RUNNING* | *PAUSED* | *STOPPED* | *FINISHED*)
 
-- `Describe()`
+- `Describe()` - get the current values of all the configurable parameters
 
-- `GetStatusInfo()`
+- `GetStatusInfo()` - get the current progress status
 
-#### 4.4 Set callbacks
+#### 4.4. Set callbacks
 
-- `SetTaskFunction()`
+- `SetTaskFunction()` - performs operation on Qtask object and return pass or fail
 
-- `SetBatchEndCallback()`
+- `SetBatchEndCallback()` - gets called when a batch completes
 
-- `SetBatchBeginCallback()`
+- `SetBatchBeginCallback()` - gets called when a batch starts
 
-- `SetWorkerPushUpdateCallback()`
+- `SetWorkerPushUpdateCallback()` - gets called everytime a worker is done processig one Qtask
 
-#### 4.5 Control
+#### 4.5. Control
 
-- `Push()`
+- `Push()` - Add tasks to the serviceQ
 
-- `Start()`
+- `Start()` - Start the workers 
 
-- `Stop()`
+- `Stop()` - Force stop all the workers
 
-- `Pause()`
+- `Pause()` - Pause all the workers
 
-- `Resume()`
+- `Resume()` - Resume all the paused workers
 
-- `Scale()`
+- `Scale()`  - scale number of workers during runtime
 
-#### 4.6
+#### 4.6. Worker helper functions - private functions
 
-- `workerHandlePopFailure()`
+- `workerHandlePopFailure()` - If a pop operation failes, this function handles the next seto actions. either batch completes of redis network issue
 
-- `workerEntryFormalities()`
+- `workerEntryFormalities()` - These set of operatios are performed by the first worker before start processing.
 
-- `workerExitFormalities()`
+- `workerExitFormalities()` - These set of oprations are performed by the end worker before exiting.
 
-- `workerLOG()`
+- `workerLOG()` - Worker logs info to stdout
 
-#### 4.7 Daemon
+#### 4.7. Daemon - private function
 
-- `worker()`
+- `worker()` - this is the worker function that runs at the background. Each worker will run one copy of thish function as a seperate goroutine. 
+
+## 5. Method - example
 
 ---
+
+```go
+svcQ, _ = serviceq.NewServiceQ("drag", "localhost", "6379", "")
+```
+
+instantiate svcQ object. 
+
+- The name of the serviceQ is `drag` 
+
+- Redis is host is `localhost`
+
+- Redis port is  `6379`
+
+- No password is set for redis
+
+---
+
+```go
+defer svcQ.Delete()
+```
+
+Delete the serviceQ once the program crashes
+
+---
+
+```go
+svcQ.SetWorkerConfig(0, 1, 2, false) 
+```
+
+Set the following worker config
+
+- Worker count is `0`
+
+- Waiting period `1` second
+
+- Resting period `2` seconds
+
+- Disable autostart
+
+---
+
+```go
+svcQ.Verbose()
+```
+
+This enables workers to log ingo in stdout.
+
+
+
+```go
+svcQ.Silent()
+```
+
+Enables workers to log
+
+---
+
+```go
+svcQ.Describe()
+```
+
+returns a map of configurable paramemers with their current values.
+
+Here is a sample response
+
+```json
+{
+    "id": "e14e4b3b9c6970a081da37b13278e210",
+    "name": "drag",
+    "auto_start": true,
+    "worker_count": 3
+    "waiting_period": 10,
+    "resting_period": 5,
+    "retry_limit": 4,
+    "loopBackoff": 3
+}
+```
+
+---
+
+```go
+svcQ.GetStatusInfo()
+```
+
+This outouts a map of the current progress . This also has data from all the workers. 
+
+response
+
+```json
+{
+    "batch_id": "f7a2a125703905435860aa037046172a",
+    "batch_duration": 28,
+    "start_time": 1684606903,    
+    "end_time": 1684606931,
+    "failed_q_length": 2,
+    "passed_q_length": 8,
+    "pending_q_length": 18,
+    "status": "RUNNING",
+    "total_failed": 2,
+    "total_pending": 18,
+    "total_submitted": 28,
+    "total_success": 8,
+    "worker_reports": {
+        "125187683cd43e2569dc05b393e32a77": {
+            "created_at": 1684606912,
+            "failed_count": 0,
+            "id": "125187683cd43e2569dc05b393e32a77",
+            "status": "RUNNING",
+            "success_count": 2,
+            "uptime": 15
+        },
+        "596056271d7fa0a6fd005fcd8be609e1": {
+            "created_at": 1684606912,
+            "failed_count": 0,
+            "id": "596056271d7fa0a6fd005fcd8be609e1",
+            "status": "RUNNING",
+            "success_count": 2,
+            "uptime": 16
+        },
+        "92396c2a3d222c0a5ebcdb09b0d38d0c": {
+            "created_at": 1684606912,
+            "failed_count": 1,
+            "id": "92396c2a3d222c0a5ebcdb09b0d38d0c",
+            "status": "RUNNING",
+            "success_count": 1,
+            "uptime": 15
+        },
+        "a853ab4abf24d0f0fcae0ac12364ad4a": {
+            "created_at": 1684606912,
+            "failed_count": 0,
+            "id": "a853ab4abf24d0f0fcae0ac12364ad4a",
+            "status": "RUNNING",
+            "success_count": 2,
+            "uptime": 18
+        },
+        "f7a3cb511f6636442ccd3732fee23a3c": {
+            "created_at": 1684606912,
+            "failed_count": 1,
+            "id": "f7a3cb511f6636442ccd3732fee23a3c",
+            "status": "RUNNING",
+            "success_count": 1,
+            "uptime": 15
+        }
+    }
+}
+```
+
+---
+
+define task function
+
+```go
+func task(data interface{}) (bool, string) {
+	
+    // do processing of task data. 
+
+	// rest all will be passed on the first attempt
+	return true, "SUCCESS | the task was successful"
+}
+```
+
+
+
+assign
+
+```go
+svcQ.SetTaskFunction(task)
+```
+
+---
+
+```go
+func batchBeginCallback(report map[string]interface{}) {
+	fmt.Println(report)
+    // emit event
+}
+
+```
+
+assign
+
+```go
+svcQ.SetBatchBeginCallback(batchBeginCallback)
+```
+
+sample value of *report*
+
+```json
+{
+  "batch_duration": 9,
+  "batch_id": "8c286c3459f233b3fa930db8e75d1c33",
+  "end_time": 1684607802,
+  "failed_tasks": [],
+  "passed_tasks": [],
+  "pending_tasks": [],
+  "serviceq_id": "84406d5894df0111007fffe806503ea7",
+  "serviceq_name": "drag",
+  "start_time": 1684607793,
+  "status": "RUNNING",
+  "total_failed": 0,
+  "total_pending": 7,
+  "total_submitted": 7,
+  "total_success": 0
+}
+```
+
+---
+
+```go
+func batchEndCallback(report map[string]interface{}) {
+	fmt.Println(report)
+    // store report to mongodb
+}
+```
+
+assignment
+
+```go
+svcQ.SetBatchEndCallback(batchEndCallback)
+```
+
+---
+
+```go
+func workerPushUpdate(update map[string]interface{}, Qtask map[string]interface{}) {
+	// fmt.Println("------------------------ worker push update ------------------------")
+	// fmt.Println("workerPushUpdate: ", update)
+	// fmt.Println("Qtask: ", Qtask)
+}
+```
+
+assignment 
+
+```go
+svcQ.SetWorkerPushUpdateCallback(workerPushUpdate)
+```
+
+sample worker output
+
+worker update
+
+```json
+{
+    "created_at": 1684607802,
+    "failed_count": 0,
+    "id": "f547e434c98162586f380a99ab96a426",
+    "status": "RUNNING",
+    "success_count": 2,
+    "uptime": 15
+}
+
+```
+
+Qtask object
+
+```json
+{
+    "task_id": "805aa851b34006b41d358a3e9facd3be",
+    "batch_id": "8c286c3459f233b3fa930db8e75d1c33",
+    "serviceq_id": "84406d5894df0111007fffe806503ea7",
+    "created_at": 1684607793,
+    "total_retry_attempts": 0
+    "last_retry_timestamp": 1684607817,
+    "remark": "SUCCESS | the task was successful",
+    "task": {
+      "country": "india",
+      "gender": "male",
+      "name": "Tuhin2"
+    },
+ }
+```
+
+---
+
+
+
+
+
+
+
+
+
+
 
 ### Test with single worker
 
