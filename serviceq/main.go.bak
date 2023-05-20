@@ -34,7 +34,6 @@ func main() {
 }
 
 // ------------------------------------- controller -------------------------------------
-
 // instantiate a serviceQ
 var svcQ *serviceq.ServiceQ
 
@@ -87,10 +86,9 @@ func workerPushUpdate(update map[string]interface{}, Qtask map[string]interface{
 // initialize the serviceQ with some default values
 func init() {
 	svcQ, _ = serviceq.NewServiceQ("drag", "localhost", "6379", "") // serviceQ name is drag, redis running in loclahost:6379, no password
-	svcQ.DisableAutostart()
-	svcQ.SetWorkerConfig(0, 1, 2, false) // 0 workers, 1 second waiting period, 2 second resting period, no auto start
-	svcQ.SetRetryConfig(4, 3)            // 4 retries, 3 seconds between retries
-	svcQ.Verbose()                       // enable verbose logging
+	svcQ.SetWorkerConfig(0, 1, 2, false)                            // 0 workers, 1 second waiting period, 2 second resting period, no auto start
+	svcQ.SetRetryConfig(4, 3)                                       // 4 retries, 3 seconds between retries
+	svcQ.Verbose()                                                  // enable verbose logging
 
 	// set callbacks
 	svcQ.SetTaskFunction(task)

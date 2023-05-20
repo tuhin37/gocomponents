@@ -1,14 +1,302 @@
-## State diagram
+# ServiceQ
 
-![](/home/drag/.var/app/com.github.marktext.marktext/config/marktext/images/2023-05-20-02-31-41-image.png)
+---
+
+## 1. Idea
+
+A service queue is similar to a restaurant queue where tasks represent customers waiting to be served. In this analogy, a worker corresponds to the restaurant staff serving the tasks (customers) in the queue. Multiple workers can serve a single queue. The worker pops a task from the queue (first in the queue) and begins working on it.
+
+If the task fails, the worker can retry it for a specified number of times, which we refer to as the retry count. When a task is completed successfully, it is moved to the `passed` queue, and the worker proceeds to the next task. If a task fails repeatedly, it will be moved to the `failed` queue, and the worker will move on to the next task from the `pending` queue. If the `pending` queue is empty, then the worker will push a batch summery and close itself.
+
+
+
+## 2. Concepts
+
+### 2.1 Queues
+
+There are 3 queues in a service queue.
+
+1. `pending`. This is the main queue where all the tasks are added.
+
+2. `passed`. This is the queue where all the successfully completed tasks are moved.
+
+3. `failed`. This is the queue where all the failed tasks are moved.
+
+
+
+### 2.2 Tasks
+
+A task is a Json object that gets added into gthe serviceQ It can be any json object. For example the task object can be as follows
+
+```json
+{
+    "country": "india",
+    "gender": "male",
+     "name": "Tuhin4"
+}
+```
+
+A bunch of relevent headers gets added to the json task object before it is inserted to the `pending` queue. WIth all the headers added, the task object is called  a Qtask.
+
+Here is what a Qtask looks like.
+
+```json
+{
+    "task_id": "8f1d1ebc2955f091f36529af46ba40e5",
+    "batch_id": "bcc815a75c0cc75324956cb6227a2052",
+    "serviceq_id": "ea1d64c967fb1adba1855474d0d86db0",    
+    "task": {
+        "country": "india",
+        "gender": "male",
+        "name": "Tuhin4"
+    },
+    "next_attempt_number": 0,
+    "next_attempt_scheduled": 1684528219,
+    "created_at": 1684528204,
+    "remark": "SUCCESS | the task was finally successful",
+}
+```
+
+As you can see the Qtask has a unique `task_id`, `batch_id` , `serviceq_id` and more.  Note, when a Qtask object is reported to the user, `next_attempt_number` and `next_attempt_scheduled` are replaced with more relevent `total_retry_attempts` and `last_retry_timestamp`. The first attempt to process the task is not counted as retry rather that considered the first try. If the try fails, then retry begins.
+
+The reported Qtask object looks like this.
+
+```json
+{
+    "task_id": "8f1d1ebc2955f091f36529af46ba40e5",
+    "batch_id": "bcc815a75c0cc75324956cb6227a2052",
+    "serviceq_id": "ea1d64c967fb1adba1855474d0d86db0",    
+    "task": {
+        "country": "india",
+        "gender": "male",
+        "name": "Tuhin4"
+    },
+    "total_retry_attempts": 0,
+    "last_retry_timestamp": 1684528219,
+    "created_at": 1684528204,
+    "remark": "SUCCESS | the task was finally successful",
+}
+```
+
+
+
+
+### 2.3 Retry
+
+The serviceQ can be configured to retry tasks if they fail at the first try. There are three parametes that dictates the retry logic. `restingPeriod`, `retryLimit` & `loopBackoff`. The `restingPeriod` is part of the worker parameters, that dictates how long a worker wait before the next Qtask pop. `retryLimit` specifies how many retry attepmts can be  made by a worker before failing a Qtask. `loopBackoff` controls the staggering of the delay between nth and (n+1)th retty. Here is the formula
+
+```
+next_attempt_scheduled = current_epoch + resting_period + ((n-1)*loop_backoff)
+```
+
+This calculation is carried out when (n-1)th attempt fails. `restingPeriod` and `loopBackoff` are configurable parameters with default value `0`. This allows the user to configure the retry mechanism.
+
+One can configure the retry mechanism to have a fixed delay between every retry. This can be done by setting `loopBackoff` to `0`.
+
+Also, a serviceQ can be configured so that the wait time between each retries keeps increasing by setting a not zeor value for `loopBackoff`.  
+
+
+
+### 2.4 Worker(s)
+
+A service queue, can be configured to have one, more or no worker attached. The default value is `1`. If there are no workers attached, then a service queue behaves just like a regular queue. A serviceQ has the following worker related parameters. 
+
+- `workerCount`  - number of workers that will be working on the queue
+
+-  `autoStart`  -  if set to true, the workers will start working as soon as tasks are added to the queue
+
+-  `waitingPeriod` - this is the amount of seconds, the worker wait before popping the first Qtask  
+
+-  `restingPeriod`  - this is the amount of seconds the worker wait before the next pop 
+
+
+
+### 2.5 State diagram
+
+
+
+
+
+![Untitled Diagram.drawio (7).png](/home/drag/Downloads/Untitled%20Diagram.drawio%20(7).png)
+
+
+
+An serviceQ object is created with status `CREATED`. A batch is created with the first task push into the `pending` queue. This also causes the state to become `PENDING`. In this state, if the serviceQ was configured with non zeo worker count and autostart  enabled (e.g. `workerCount=1` & `autoStart = true`), then the serviceQ will autometically start the worker(s). This will also cause the sate to `RUNNING`. Othewire `.Start()` method needs to be called manually. When the the serviceQ is in `RUNNING` state, one can use `.Stop()`   method. This stops  worker(s). This also moves all the pennding Qtasks into failed queue and generated report. This also causes the status to become `STOPPED`. At this step if new Qtasks are added to the pending queue, then this creates a new batch. If the workes are not stopped, and they run their course, then eventually all the Qtasks from the pending queue will be processed (either passed or failed) at this stage the service queue will generate batch report and  `SetBatchEndCallback()` will be called with the batch report.
+
+### 2.6 Batch
+
+A batch is created when the first task added to an empty `pending` queue. This is what a batch structure looks like.
+
+```json
+{
+    "batch_id": "bcc815a75c0cc75324956cb6227a2052",
+    "serviceq_id": "ea1d64c967fb1adba1855474d0d86db0",
+    "serviceq_name": "drag",
+    "start_time": 1684528204,
+    "end_time": 1684528286,
+    "batch_duration": 82,
+    "total_failed": 2,
+    "total_pending": 0,
+    "total_submitted": 7,
+    "total_success": 5
+    "status": "FINISHED",
+    "failed_tasks": [],
+    "passed_tasks": [],
+    "pending_tasks": [],
+}
+```
+
+ Each batch, when created, is assigned an enique `batch_id`. Similarly, each serviceQ, when instantiated,  is assigned an unique `serviceq_id`. `serviceq_name` is the name provided while creating the serviceQ object, using `NewServiceQ()` function.
+
+
+
+
+
+## 3. Parameters
+
+- `id` - serviceQ id. Auto generated during instantiation
+
+- `name`  - name of the serviceQ. Taken as user input during instantiation. This string prepended to all the queue names. for example if serviceQ name is 'foo' then the pending queue's name in redis becomes 'foo-pending'                                             
+
+- `isSilent` - This boolean variable decides, wheather the serviceQ prints loggs. By default a serviceQ object is instantiated with a *true* value. *.Silent()* & *.Verbose()* methods can be used to alter this variable. 
+
+- `workerCount`  - Determines number of workers to use. Default value is `1`
+
+- `autoStart` - If set to true, then the workers starts processing autometically when the first task is added to the serviceQ. Devault value is *true*
+
+- `waitingPeriod` - This is the time duration in seconds, This is how long a worker waiting before the first pop. Default value is *0*
+
+- `restingPeriod` - This is the time duration in seconds. This is how long a worker waits before every pop (except the first pop). Default vaue is *0*
+
+- `workerPostBox` - This is a map, which sorks like a post box, every worker dumps their latest update here. Every key in this map corrosponds to a running or paused worker id. If the key is deleted, the corrosponding worker will commit suicide. 
+
+- `retryLimit` - This is the maximum number of retries allowd. If a Qtask still failes after this many retirs, the Qtast object will be pushed into the failed queue. Note the first try is not counted as a retry. i.e. if this value is set to 5 which means the Qtast will be attempted 6 times totally.
+
+- `loopBackoff` - This variable is used to generate and control the stagger that is introduced between every next retry. 
+
+- `batchID` - This is auto generated every time a batch is created.
+
+- `status` - This reflects the current state of the serviceQ. This also acts as beacon for all the workers. i.e. if the *status* variable is changed from *RUNNING* to *PAUSE*, then all the worker will pause. Here are the possible
+  
+  -  *CREATED*
+  
+  - *PENDING*
+  
+  - *RUNNING*
+  
+  - *PAUSED*
+  
+  - *STOPPED*
+  
+  - *FINISHED*
+
+- 
+
+- `totalSubmitted` - This is an auto generated number. This counts the total number of Qtasks that are pushed in the current batch
+
+- `totalPassed` - This is an auto generated number. This counts the total number of Qtasks that were passed in the current batch.
+
+- `totalFailed` - This is an auto generated number. This counts the total number of Qtasks that were failed and added to the failed queue
+
+- `startTime` - This is an auto generated parameter. Takes the timestamp of the first *.Push()*
+
+- `endTime` - This is an auto generated parameter. Takes the timestamp when the pending queue becomes empty.
+
+- `batchDuration` - This is an auto generated parameter. (*endTime* - *startTime*). 
+
+- `redis` - This is the redis client. Imported from dependency *github.com/tuhin37/goclients*. This communicates with the redis.
+
+- `taskFunction` - This is a function handler. This function defines what is means to process a task. This defines, what makes a task pass, fail also if retry is possible. One can use  *.SetTaskFunction()* method to assign a user defined task to this value. The user defined function must return *True* (indicating task passed) or *False* (Indicating task failed).  Aditionally the function can also pass remark as a second return. This remarks is added to the Qtask object in the report.A remark has two parts, first part is a directive and send part is the message. This remark's directive part is used to decide whether to retry the task or not (when failed). e.g.
+  
+  -  *"NO_RETRY | whatsapp not registered"*,
+  
+  -  "*SUCCESS | user added to engine*", 
+  
+  -  "*RETRY | 360dialog queue full*"
+  
+  so *NO_RETRY*, *SUCCESS* and *RETRY* are the directive part of remarks and the rest is the message part.  The worker decides wheather to add the Qtask object to the passed queue or to the failed queue or to the pending queue again for retry, based on the returns of this function.
+
+- `batchEndCallback` - This is a function handler. This function is called when a batch end. The batch report is make available in the scope of this function. Mostly used to store report to a persistent storage (e.g. mongodb). One can use *.SetBatchEndCallback()* method to assign an user defined function to this function handler.  
+
+- `batchBeginCallback` - This is a function handler. This function is called when a new batch is created. use *.SetBatchBeginCallback()* method to assign an user defined function to this handler.
+
+- `workerPushUpdateCallback` - This is a function handler. This will get called by each worker when they finish processing one Qtask. The Qtask object and worker update report is make available in the the scope of the functon .
+
+
+
+## 4. Methods
+
+The methods are divided in the following catagories
+
+##### 4.1 Instantiation
+
+- `NewServiceQ()` - constructor function. Instantiates a new serviceQ object
+
+- `Delete()` - method. Deletes the object and clear redis
+
+#### 4.2 Set configurations
+
+- `SetWorkerConfig()`
+
+- `SetRetryConfig()`
+
+- `Verbose()`
+
+- `Silent()`
+
+#### 4.3 Get configurations
+
+- `GetStatus()`
+
+- `Describe()`
+
+- `GetStatusInfo()`
+
+#### 4.4 Set callbacks
+
+- `SetTaskFunction()`
+
+- `SetBatchEndCallback()`
+
+- `SetBatchBeginCallback()`
+
+- `SetWorkerPushUpdateCallback()`
+
+#### 4.5 Control
+
+- `Push()`
+
+- `Start()`
+
+- `Stop()`
+
+- `Pause()`
+
+- `Resume()`
+
+- `Scale()`
+
+#### 4.6
+
+- `workerHandlePopFailure()`
+
+- `workerEntryFormalities()`
+
+- `workerExitFormalities()`
+
+- `workerLOG()`
+
+#### 4.7 Daemon
+
+- `worker()`
+
+
 
 
 
 ---
 
 ### Test with single worker
-
-
 
 These tasks are added
 
