@@ -542,17 +542,7 @@ Qtask object
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-### Test with single worker
+## 6. Testing
 
 These tasks are added
 
@@ -1059,3 +1049,17 @@ Final batch report
 ```
 
 Note: This time the batch completed faster 82 seconds instead of 113 seconds
+
+---
+
+## 7. Future scope
+
+- cron type scheduller. The workers will run after every 1 hour.
+
+- .WorkOnce() method, processes one task, when no workers are running
+
+- sync serviceQ object with redis, for persistance
+
+- A method to estimate time required for a batch
+  
+  
