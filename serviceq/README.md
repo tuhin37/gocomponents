@@ -1048,9 +1048,7 @@ Note: This time the batch completed faster 82 seconds instead of 113 seconds
 
 ## 7. Postman collection
 
-Download postman collection from [here]()
-
-
+Download postman collection from [here](https://raw.githubusercontent.com/tuhin37/gocomponents/main/serviceq/doc/serviceQ.postman_collection.json)
 
 ---
 
@@ -1063,5 +1061,3 @@ Download postman collection from [here]()
 - sync serviceQ object with redis, for persistance
 
 - A method to estimate time required for a batch
-  
-  
