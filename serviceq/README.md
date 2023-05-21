@@ -315,8 +315,6 @@ svcQ.Verbose()
 
 This enables workers to log ingo in stdout.
 
-
-
 ```go
 svcQ.Silent()
 ```
@@ -421,15 +419,13 @@ define task function
 
 ```go
 func task(data interface{}) (bool, string) {
-	
+
     // do processing of task data. 
 
-	// rest all will be passed on the first attempt
-	return true, "SUCCESS | the task was successful"
+    // rest all will be passed on the first attempt
+    return true, "SUCCESS | the task was successful"
 }
 ```
-
-
 
 assign
 
@@ -441,10 +437,9 @@ svcQ.SetTaskFunction(task)
 
 ```go
 func batchBeginCallback(report map[string]interface{}) {
-	fmt.Println(report)
+    fmt.Println(report)
     // emit event
 }
-
 ```
 
 assign
@@ -478,7 +473,7 @@ sample value of *report*
 
 ```go
 func batchEndCallback(report map[string]interface{}) {
-	fmt.Println(report)
+    fmt.Println(report)
     // store report to mongodb
 }
 ```
@@ -493,9 +488,9 @@ svcQ.SetBatchEndCallback(batchEndCallback)
 
 ```go
 func workerPushUpdate(update map[string]interface{}, Qtask map[string]interface{}) {
-	// fmt.Println("------------------------ worker push update ------------------------")
-	// fmt.Println("workerPushUpdate: ", update)
-	// fmt.Println("Qtask: ", Qtask)
+    // fmt.Println("------------------------ worker push update ------------------------")
+    // fmt.Println("workerPushUpdate: ", update)
+    // fmt.Println("Qtask: ", Qtask)
 }
 ```
 
@@ -518,7 +513,6 @@ worker update
     "success_count": 2,
     "uptime": 15
 }
-
 ```
 
 Qtask object
@@ -1052,7 +1046,15 @@ Note: This time the batch completed faster 82 seconds instead of 113 seconds
 
 ---
 
-## 7. Future scope
+## 7. Postman collection
+
+Download postman collection from here
+
+
+
+---
+
+## 8. Future scope
 
 - cron type scheduller. The workers will run after every 1 hour.
 

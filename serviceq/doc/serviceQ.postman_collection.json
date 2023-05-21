@@ -1,0 +1,147 @@
+{
+	"info": {
+		"_postman_id": "15fe8cf1-547a-4f24-a969-e37ef3ac1774",
+		"name": "serviceQ",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "15352322"
+	},
+	"item": [
+		{
+			"name": "add",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "[\n    {\n        \"name\": \"Tuhin1\",\n        \"gender\": \"male\",\n        \"country\": \"india\"\n    },\n    {\n        \"name\": \"Tuhin2\",\n        \"gender\": \"male\",\n        \"country\": \"india\"\n    },\n    {\n        \"name\": \"Tuhin3\",\n        \"gender\": \"male\",\n        \"country\": \"india\"\n    },\n    {\n        \"name\": \"Tuhin4\",\n        \"gender\": \"male\",\n        \"country\": \"india\"\n    },\n    {\n        \"name\": \"Tuhin5\",\n        \"gender\": \"male\",\n        \"country\": \"india\"\n    },\n    {\n        \"name\": \"Tuhin6\",\n        \"gender\": \"male\",\n        \"country\": \"india\"\n    }, \n    {\n        \"name\": \"Tuhin7\",\n        \"gender\": \"male\",\n        \"country\": \"india\"\n    }\n]\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{BASE_URL_GO}}/add",
+					"host": [
+						"{{BASE_URL_GO}}"
+					],
+					"path": [
+						"add"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "worker",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"worker_count\":1,\n    \"waiting_period\": 10,\n    \"resting_period\": 5,\n    \"auto_start\": true\n}   ",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{BASE_URL_GO}}/set-worker",
+					"host": [
+						"{{BASE_URL_GO}}"
+					],
+					"path": [
+						"set-worker"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "start",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL_GO}}/start",
+					"host": [
+						"{{BASE_URL_GO}}"
+					],
+					"path": [
+						"start"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "describe",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL_GO}}/describe",
+					"host": [
+						"{{BASE_URL_GO}}"
+					],
+					"path": [
+						"describe"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "pause",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL_GO}}/pause",
+					"host": [
+						"{{BASE_URL_GO}}"
+					],
+					"path": [
+						"pause"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "stop",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL_GO}}/stop",
+					"host": [
+						"{{BASE_URL_GO}}"
+					],
+					"path": [
+						"stop"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "status",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL_GO}}/status",
+					"host": [
+						"{{BASE_URL_GO}}"
+					],
+					"path": [
+						"status"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
