@@ -1048,7 +1048,7 @@ Note: This time the batch completed faster 82 seconds instead of 113 seconds
 
 ## 7. Postman collection
 
-Download postman collection from here
+Download postman collection from [here]()
 
 
 
