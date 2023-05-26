@@ -308,10 +308,11 @@ func (s *ServiceQ) Push(task interface{}) error {
 		"task_id":                calculateMD5([]string{strconv.Itoa(int(time.Now().UnixNano())), s.name, fmt.Sprintf("%v", task)}),
 		"batch_id":               s.batchID,
 		"serviceq_id":            s.id,
+		"serviceq_name":          s.name,
 		"created_at":             time.Now().Unix(),
 		"next_attempt_number":    0,
 		"next_attempt_scheduled": 0,
-		"remark":                 "",
+		"remark":                 "CREATED | pushed to the queue",
 	}
 
 	// convert map to json ([]byte)
