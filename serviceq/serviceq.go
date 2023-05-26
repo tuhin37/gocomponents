@@ -661,11 +661,13 @@ func worker(s *ServiceQ) {
 					break
 				}
 
+				s.mu.RLock()
+				_, ok := s.workerPostBox[workerParams["id"].(string)]
+				runningWorkerCount := len(s.workerPostBox)
+				s.mu.RUnlock()
+
 				// check mailbox before every pop, if the worker is deleted from the mailbox, then the worker commits cuicide
-				if _, ok := s.workerPostBox[workerParams["id"].(string)]; !ok {
-					s.mu.Lock()
-					runningWorkerCount := len(s.workerPostBox)
-					s.mu.Unlock()
+				if !ok {
 
 					// if this is the last worker, do the exit formalities
 					if runningWorkerCount == 0 {
