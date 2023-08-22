@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -82,6 +83,7 @@ func execp(c *gin.Context) {
 	// ATP: command holds the system call command. e.g. "ls -al | grep main && tree ."
 
 	stdout, _ := runr.ExecutePayloadStream(command)
+	fmt.Println("execuitedAt: ", runr.GetState())
 
 	c.String(200, stdout)
 }

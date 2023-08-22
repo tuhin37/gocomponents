@@ -26,8 +26,8 @@ type Runner struct {
 	restingPeriod      int            // number of seconds the runner waits before the next iteration. only when in loopForever=true. default=0
 	scheduledAt        int64          // future time when the command is scheduled to execute. default=0
 	logFile            string         // specifiy a file to write logs. if  set to "" then no log files will be written. default=""
-	execuitedAt        uint64         // epoch then the system call was execuited
-	executionTimeNano  uint64         // units of nano seconds ellapsed since the system call has started. default=0
+	execuitedAt        int64          // epoch then the system call was execuited
+	executionTimeNano  int64          // units of nano seconds ellapsed since the system call has started. default=0
 	verificationPhrase string         // if this string is found the in the log then that means the output is vefified, and now the status becomes SUCCESSFUL. default="" that means verification is disabled and now the status can become FINISHED
 	status             string         // PENDING | RUNNING | SUCCESSFUL | CRASHED | FINISHED | TIMEDOUT. default=PENDING
 	sysCmd             string         // the system command to be execuited. e.g. "ls -al | grep foo". Required
@@ -157,6 +157,7 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 
 	// initiate a command variable
 	cmd := exec.Command("bash", "-c", command)
+	r.sysCmd = command
 
 	// set commands STDOUT to the STDOUT of the system
 	stdout, err := cmd.StdoutPipe()
@@ -224,6 +225,7 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 	}()
 
 	// Execute the command
+	r.execuitedAt = time.Now().UnixNano()
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
@@ -233,6 +235,9 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	// capture command exit timestamp
+	r.executionTimeNano = time.Now().UnixNano() - r.execuitedAt
 
 	// Wait for both goroutines to finish before returning
 	wg.Wait()
