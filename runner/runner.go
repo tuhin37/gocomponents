@@ -24,7 +24,7 @@ type Runner struct {
 	waitingPeriod      int            // number of seconds the runner waits before executing the system call. default=0
 	restingPeriod      int            // number of seconds the runner waits before the next iteration. only when in loopForever=true. default=0
 	scheduledAt        int64          // future time when the command is scheduled to execute. default=0
-	LogPath            string         // specifiy a file to write logs. if  set to "" then no log files will be written. default=""
+	logFile            string         // specifiy a file to write logs. if  set to "" then no log files will be written. default=""
 	execuitedAt        uint64         // epoch then the system call was execuited
 	executionTimeNano  uint64         // units of nano seconds ellapsed since the system call has started. default=0
 	verificationPhrase string         // if this string is found the in the log then that means the output is vefified, and now the status becomes SUCCESSFUL. default="" that means verification is disabled and now the status can become FINISHED
@@ -90,8 +90,8 @@ func (r *Runner) Schedule(sc int64) {
 	r.scheduledAt = sc
 }
 
-func (r *Runner) SetLogPath(path string) {
-	r.LogPath = path
+func (r *Runner) SetLogFile(file string) {
+	r.logFile = file
 }
 
 func (r *Runner) SetVerificationPhrase(phrase string) {
@@ -110,7 +110,7 @@ func (r *Runner) GetState() map[string]interface{} {
 		"waiting_period":       r.waitingPeriod,
 		"resting_period":       r.restingPeriod,
 		"scheduled_at":         r.scheduledAt,
-		"file_path":            r.LogPath,
+		"file_path":            r.logFile,
 		"execuited_at":         r.execuitedAt,
 		"execution_time_nano":  r.executionTimeNano,
 		"verification_phrase":  r.verificationPhrase,
@@ -165,8 +165,8 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 
 	var file *os.File
 	// Open the file in append mode
-	if r.LogPath != "" { // TODO check if a proper file or /path/to/file
-		file, err = os.OpenFile(r.LogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if r.logFile != "" { // TODO check if a proper file or /path/to/file
+		file, err = os.OpenFile(r.logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			fmt.Println("Error opening file:", err)
 			return "", err
@@ -189,7 +189,7 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 			r.logBuffer = append(r.logBuffer, '\n')
 
 			// write to a file here
-			if r.LogPath != "" {
+			if r.logFile != "" {
 				_, err := file.WriteString(stdoutLine + "\n")
 				if err != nil {
 					fmt.Println("Error writing to file:", err)
