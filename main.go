@@ -15,7 +15,7 @@ var runr *runner.Runner
 // initialize the serviceQ with some default values
 func init() {
 	runr = runner.NewRunner("ping google.com -c 4") // serviceQ name is drag, redis running in loclahost:6379, no password
-	runr.SetLogFile("log.log")
+	runr.SetLogFile("log.md")
 	runr.EnableConsole()
 
 }

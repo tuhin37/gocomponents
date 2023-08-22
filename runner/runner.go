@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -182,6 +183,15 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+
+		if r.logFile != "" {
+			_, err := file.WriteString("[" + strconv.Itoa(int(time.Now().UnixMicro())) + "]" + " command" + "\n```shell\n" + r.sysCmd + "\n```\n\n" + "[" + strconv.Itoa(int(time.Now().UnixMicro())) + "]" + " Response begin\n```shell\n")
+			if err != nil {
+				fmt.Println("Error writing to file:", err)
+				return
+			}
+		}
+
 		for scanner.Scan() {
 			stdoutLine := scanner.Text()
 
@@ -202,6 +212,15 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 				fmt.Println(stdoutLine)
 			}
 		}
+
+		if r.logFile != "" {
+			_, err := file.WriteString("```\n" + "[" + strconv.Itoa(int(time.Now().UnixMicro())) + "]" + " Response end\n" + "---\n")
+			if err != nil {
+				fmt.Println("Error writing to file:", err)
+				return
+			}
+		}
+
 	}()
 
 	// Execute the command
