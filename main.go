@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -17,6 +16,7 @@ var runr *runner.Runner
 func init() {
 	runr = runner.NewRunner("ping google.com -c 4") // serviceQ name is drag, redis running in loclahost:6379, no password
 	runr.SetLogFile("log.md")
+	runr.SetVerificationPhrase(".go")
 	runr.EnableConsole()
 
 }
@@ -25,10 +25,12 @@ func main() {
 	r := gin.Default()
 	// -------------------------------------- hypd --------------------------------------
 	// r.POST("/update", update)
-	r.GET("/exec", execute)
+	// r.GET("/exec", execute)
 	r.POST("/execp", execp)
+
 	// r.GET("/logs", logs)
 	r.GET("/state", getState)
+
 	// r.GET("/status", status)
 	// r.GET("/stop", stop)
 	// r.GET("/restart", restart)
@@ -50,12 +52,6 @@ func getState(c *gin.Context) {
 	c.AsciiJSON(200, runr.GetState())
 }
 
-func execute(c *gin.Context) {
-	stdout, _ := runr.Execute()
-	c.String(200, stdout)
-
-}
-
 func execp(c *gin.Context) {
 	// Read the request body
 	requestBodyBytes, err := c.GetRawData()
@@ -73,17 +69,11 @@ func execp(c *gin.Context) {
 		return
 	}
 
-	// Iterate through the map and print key-value pairs
-	for key, value := range data {
-		log.Printf("Key: %s, Value: %v\n", key, value)
-	}
-
 	command := data["instruction"]
+	_ = command
 
 	// ATP: command holds the system call command. e.g. "ls -al | grep main && tree ."
+	stdout, _ := runr.Execute(command)
 
-	stdout, _ := runr.ExecutePayloadStream(command)
-	fmt.Println("execuitedAt: ", runr.GetState())
-
-	c.String(200, stdout)
+	c.String(200, string(stdout))
 }

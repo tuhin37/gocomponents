@@ -10,32 +10,29 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
+var STDPIPE = make(chan []byte)
+
 // ------------------------- ServiceQ -------------------------
 type Runner struct {
-	id                 string         // id of the runner. md5(epoch+sysCmd)
-	isStream           bool           // if true, then streams out the stdout's content through an unbuffered output chanel. default=false
-	isConsole          bool           // if set to true then the shell's commands output is printed on console. default=false
-	loopCount          int            // 1 => run once; n(n>1) => run n times; 0 => loop forever. default=1
-	iterationStatus    map[int]string // records iteration number and the corrosponding state. e.g. [1] => TIMEDOUT, [2] => SUCCESSFUL [3] => SUCCESSFUL
-	timeout            int            // maximum duration (in seconds) the system call has before declearing failed. default=0
-	waitingPeriod      int            // number of seconds the runner waits before executing the system call. default=0
-	restingPeriod      int            // number of seconds the runner waits before the next iteration. only when in loopForever=true. default=0
-	scheduledAt        int64          // future time when the command is scheduled to execute. default=0
-	logFile            string         // specifiy a file to write logs. if  set to "" then no log files will be written. default=""
-	execuitedAt        int64          // epoch then the system call was execuited
-	executionTimeNano  int64          // units of nano seconds ellapsed since the system call has started. default=0
-	verificationPhrase string         // if this string is found the in the log then that means the output is vefified, and now the status becomes SUCCESSFUL. default="" that means verification is disabled and now the status can become FINISHED
-	status             string         // PENDING | RUNNING | SUCCESSFUL | CRASHED | FINISHED | TIMEDOUT. default=PENDING
-	sysCmd             string         // the system command to be execuited. e.g. "ls -al | grep foo". Required
-	logBuffer          []byte         // stdout of the system call is kept here. default="", max=1MB
-	mu                 sync.RWMutex   // for making resources thread safe
+	id                 string // id of the runner. md5(epoch+sysCmd)
+	isConsole          bool   // if set to true then the shell's commands output is printed on console. default=false
+	timeout            int    // maximum duration (in seconds) the system call has before declearing failed. default=0
+	waitingPeriod      int    // number of seconds the runner waits before executing the system call. default=0
+	logFile            string // specifiy a file to write logs. if  set to "" then no log files will be written. default=""
+	execuitedAt        int64  // epoch then the system call was execuited
+	executionTimeNano  int64  // units of nano seconds ellapsed since the system call has started. default=0
+	verificationPhrase string // if this string is found the in the log then that means the output is vefified, and now the status becomes SUCCESSFUL. default="" that means verification is disabled and now the status can become FINISHED
+	status             string // PENDING | RUNNING | COMPLETED | FAILED | TIMEDOUT | SUCCEEDED. default=PENDING. [default=PENDING, COMPLETED => the exitcode of the system call was 0, FAILED => non-zero, SUCCESSFUL => the verification string was found]
+	sysCmd             string // the system command to be execuited. e.g. "ls -al | grep foo". Required
+	logBuffer          []byte // stdout of the system call is kept here. default="", max=1MB
 }
 
-// ----------------------- instantiation -----------------------
+// ----------------------- constructor -----------------------
 func NewRunner(cmd string) *Runner {
 	// TODO take a second optional string parameter. if that is set to "RUN_ONCE" then this function's behaviour will be modified and
 
@@ -43,22 +40,12 @@ func NewRunner(cmd string) *Runner {
 	r := &Runner{}
 	r.id = calculateMD5([]byte(fmt.Sprintf("%v", time.Now().UnixNano()) + cmd)[:]) // md5 (current_epoch + name)
 	r.sysCmd = cmd
-	r.loopCount = 1
 	r.status = "PENDING"
 
 	return r
 }
 
-// if enabled, stdout is piped out using `stdout` channel
-func (r *Runner) EnableStream() {
-	r.isStream = true
-}
-
-func (r *Runner) DisableStream() {
-	r.isStream = false
-}
-
-// if enabled, stdout is piped out will be printed in console
+// enable console print
 func (r *Runner) EnableConsole() {
 	r.isConsole = true
 }
@@ -67,34 +54,24 @@ func (r *Runner) DisableConsole() {
 	r.isConsole = false
 }
 
-// set number of times the the shell command will run
-func (r *Runner) SetLoopCount(count int) {
-	if count < 0 {
-		return
-	}
-	r.loopCount = count
-}
-
 func (r *Runner) SetTimeout(timeout int) {
 	r.timeout = timeout
 }
 
+// if set then the rinner will wait that much seconds before execuiting the system call. default=0
 func (r *Runner) SetWaitingPeriod(wp int) {
-	r.waitingPeriod = wp
+	if wp > 0 {
+		r.waitingPeriod = wp
+	}
 }
 
-func (r *Runner) SetRestingPeriod(rp int) {
-	r.restingPeriod = rp
-}
-
-func (r *Runner) Schedule(sc int64) {
-	r.scheduledAt = sc
-}
-
+// provide a filename for log
 func (r *Runner) SetLogFile(file string) {
 	r.logFile = file
 }
 
+// if verification phrase is provided, then the runner finds the phrase in the output of the system call
+// if found then
 func (r *Runner) SetVerificationPhrase(phrase string) {
 	r.verificationPhrase = phrase
 }
@@ -102,22 +79,17 @@ func (r *Runner) SetVerificationPhrase(phrase string) {
 func (r *Runner) GetState() map[string]interface{} {
 	var logSize = len(r.logBuffer)
 	return map[string]interface{}{
-		"id":                   r.id,
-		"stream":               r.isStream,
-		"console":              r.isConsole,
-		"loop_count":           r.loopCount,
-		"iterationwise_status": r.iterationStatus,
-		"timeout":              r.timeout,
-		"waiting_period":       r.waitingPeriod,
-		"resting_period":       r.restingPeriod,
-		"scheduled_at":         r.scheduledAt,
-		"file_path":            r.logFile,
-		"execuited_at":         r.execuitedAt,
-		"execution_time_nano":  r.executionTimeNano,
-		"verification_phrase":  r.verificationPhrase,
-		"status":               r.status,
-		"system_command":       r.sysCmd,
-		"log_size_bytes":       logSize,
+		"id":                  r.id,
+		"console":             r.isConsole,
+		"timeout":             r.timeout,
+		"waiting_period":      r.waitingPeriod,
+		"file_path":           r.logFile,
+		"execuited_at":        r.execuitedAt,
+		"execution_time_nano": r.executionTimeNano,
+		"verification_phrase": r.verificationPhrase,
+		"status":              r.status,
+		"system_command":      r.sysCmd,
+		"log_size_bytes":      logSize,
 	}
 }
 
@@ -125,35 +97,14 @@ func (r *Runner) GetStatus() string {
 	return r.status
 }
 
-func (r *Runner) Execute() (string, error) {
-	fmt.Println("Here")
-	cmd := exec.Command("bash", "-c", r.sysCmd)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", err
+func (r *Runner) Execute(commands ...string) ([]byte, error) {
+	// Combine multiple commands into a single string if provided
+	var command string
+	if len(commands) > 0 {
+		command = strings.Join(commands, " && ")
+	} else {
+		command = r.sysCmd
 	}
-	return string(output), nil
-
-}
-
-func (r *Runner) ExecutePayload(command string) (string, error) {
-	/*
-		this function accounts for the fact that an input command could also be "ls -al | grep jpg && pwd"
-	*/
-	cmd := exec.Command("bash", "-c", command)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", err
-	}
-	return string(output), nil
-}
-
-func (r *Runner) ExecutePayloadStream(command string) (string, error) {
-	/*
-		this function accounts for the fact that an input command could also be "ls -al | grep jpg && pwd"
-	*/
 
 	// initiate a command variable
 	cmd := exec.Command("bash", "-c", command)
@@ -162,7 +113,7 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 	// set commands STDOUT to the STDOUT of the system
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
 
 	var file *os.File
@@ -171,14 +122,15 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 		file, err = os.OpenFile(r.logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			fmt.Println("Error opening file:", err)
-			return "", err
+			return []byte{}, err
 		}
 		defer file.Close()
 	}
+
 	// Create a wait group to synchronize goroutines
 	var wg sync.WaitGroup
 
-	// instantiate an scaner object. will read command's output stream from here
+	// instantiate a scanner object. will read command's output stream from here
 	scanner := bufio.NewScanner(stdout)
 
 	wg.Add(1)
@@ -214,6 +166,7 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 			}
 		}
 
+		// write footer after command is executed
 		if r.logFile != "" {
 			_, err := file.WriteString("```\n" + "[" + strconv.Itoa(int(time.Now().UnixMicro())) + "]" + " Response end\n" + "---\n")
 			if err != nil {
@@ -225,26 +178,47 @@ func (r *Runner) ExecutePayloadStream(command string) (string, error) {
 	}()
 
 	// Execute the command
+	r.logBuffer = []byte{} // reset the buffer
+	r.status = "RUNNING"
 	r.execuitedAt = time.Now().UnixNano()
 	if err := cmd.Start(); err != nil {
-		return "", err
+		return []byte{}, err
 	}
 
-	// Wait for the command to finish
+	// timeoutNano := int64(r.timeout * 1000000000)
+	// for {
+	// 	r.executionTimeNano = time.Now().UnixNano() - r.execuitedAt
+	// 	if r.executionTimeNano > timeoutNano {
+	// 		// return prematurely
+	// 		r.status = "TIMEDOUT"
+	// 		return r.logBuffer, nil
+	// 	}
+	// }
+
+	// Wait for the system call to finish
 	err = cmd.Wait()
-	if err != nil {
-		return "", err
-	}
 
 	// capture command exit timestamp
-	r.executionTimeNano = time.Now().UnixNano() - r.execuitedAt
 
-	// Wait for both goroutines to finish before returning
+	// capture the exit code of the system call
+	exitCode := cmd.ProcessState.ExitCode()
+
+	// update status based on exit code
+	if exitCode == 0 {
+		r.status = "COMPLETED"
+	} else {
+		r.status = "FAILED"
+	}
+
+	// search and match output and set status to VERIFIED
+	if r.verificationPhrase != "" && strings.Contains(string(r.logBuffer), r.verificationPhrase) {
+		r.status = "SUCCEEDED"
+	}
+
+	// Wait for all goroutines to finish before returning
 	wg.Wait()
 
-	fmt.Println("log: ", string(r.logBuffer))
-
-	return "", nil
+	return r.logBuffer, nil
 }
 
 func (r *Runner) Logs() string {
