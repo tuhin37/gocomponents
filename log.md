@@ -1,430 +1,231 @@
-[1692814922671340] command
-```shell
-ls -al
-```
-
-[1692814922671341] Response begin
-```shell
-total 24
-drwxr-xr-x 1 drag drag  162 Aug 23 23:52 .
-drwxr-xr-x 1 drag drag   52 May 31 01:02 ..
--rw-r--r-- 1 drag drag    0 Aug 23 23:51 foo.bar
-drwxr-xr-x 1 drag drag  144 Aug 23 01:52 .git
--rw-r--r-- 1 drag drag 1429 May 10 00:38 go.mod
--rw-r--r-- 1 drag drag 8386 May 10 00:38 go.sum
-drwxr-xr-x 1 drag drag   86 May  4 12:52 graph
-drwxr-xr-x 1 drag drag   40 May  4 12:36 heap
--rw-r--r-- 1 drag drag   91 Aug 23 23:52 log.md
--rw-r--r-- 1 drag drag 3120 Aug 23 23:51 main.go
-drwxr-xr-x 1 drag drag   38 May  4 12:26 queue
-drwxr-xr-x 1 drag drag   18 Aug 18 22:56 runner
-drwxr-xr-x 1 drag drag   68 May 20 22:33 serviceq
-drwxr-xr-x 1 drag drag   12 May  4 12:55 set
-drwxr-xr-x 1 drag drag   38 May  4 12:26 stack
-drwxr-xr-x 1 drag drag   70 May  4 12:31 store
-drwxr-xr-x 1 drag drag   38 May  4 12:51 tree
-```
-[1692814922674023] Response end
----
-[1692814952540215] command
-```shell
-ls -al
-```
-
-[1692814952540245] Response begin
-```shell
-total 24
-drwxr-xr-x 1 drag drag  162 Aug 23 23:52 .
-drwxr-xr-x 1 drag drag   52 May 31 01:02 ..
--rw-r--r-- 1 drag drag    0 Aug 23 23:51 foo.bar
-drwxr-xr-x 1 drag drag  144 Aug 23 01:52 .git
--rw-r--r-- 1 drag drag 1429 May 10 00:38 go.mod
--rw-r--r-- 1 drag drag 8386 May 10 00:38 go.sum
-drwxr-xr-x 1 drag drag   86 May  4 12:52 graph
-drwxr-xr-x 1 drag drag   40 May  4 12:36 heap
--rw-r--r-- 1 drag drag 1029 Aug 23 23:52 log.md
--rw-r--r-- 1 drag drag 3120 Aug 23 23:51 main.go
-drwxr-xr-x 1 drag drag   38 May  4 12:26 queue
-drwxr-xr-x 1 drag drag   18 Aug 18 22:56 runner
-drwxr-xr-x 1 drag drag   68 May 20 22:33 serviceq
-drwxr-xr-x 1 drag drag   12 May  4 12:55 set
-drwxr-xr-x 1 drag drag   38 May  4 12:26 stack
-drwxr-xr-x 1 drag drag   70 May  4 12:31 store
-drwxr-xr-x 1 drag drag   38 May  4 12:51 tree
-```
-[1692814952542765] Response end
----
-[1692910555013826] command
-```shell
-ls -al
-```
-
-[1692910555013865] Response begin
-```shell
-total 24
-drwxr-xr-x 1 drag drag  162 Aug 23 23:52 .
-drwxr-xr-x 1 drag drag   52 May 31 01:02 ..
--rw-r--r-- 1 drag drag    0 Aug 23 23:51 foo.bar
-drwxr-xr-x 1 drag drag  144 Aug 23 01:52 .git
--rw-r--r-- 1 drag drag 1429 May 10 00:38 go.mod
--rw-r--r-- 1 drag drag 8386 May 10 00:38 go.sum
-drwxr-xr-x 1 drag drag   86 May  4 12:52 graph
-drwxr-xr-x 1 drag drag   40 May  4 12:36 heap
--rw-r--r-- 1 drag drag 1967 Aug 25 02:25 log.md
--rw-r--r-- 1 drag drag 2005 Aug 25 02:25 main.go
-drwxr-xr-x 1 drag drag   38 May  4 12:26 queue
-drwxr-xr-x 1 drag drag   18 Aug 18 22:56 runner
-drwxr-xr-x 1 drag drag   68 May 20 22:33 serviceq
-drwxr-xr-x 1 drag drag   12 May  4 12:55 set
-drwxr-xr-x 1 drag drag   38 May  4 12:26 stack
-drwxr-xr-x 1 drag drag   70 May  4 12:31 store
-drwxr-xr-x 1 drag drag   38 May  4 12:51 tree
-```
-[1692910555016647] Response end
----
-[1692910569139654] command
-```shell
-ls -al | grep main
-```
-
-[1692910569139656] Response begin
-```shell
--rw-r--r-- 1 drag drag 2005 Aug 25 02:25 main.go
-```
-[1692910569143526] Response end
----
-[1692910584551016] command
-```shell
-ls -al | grep main
-```
-
-[1692910584551040] Response begin
-```shell
--rw-r--r-- 1 drag drag 2005 Aug 25 02:25 main.go
-```
-[1692910584554831] Response end
----
-[1692910620822558] command
-```shell
-tree . | grep main
-```
-
-[1692910620822560] Response begin
-```shell
-├── main.go
-│   ├── main.go.bak
-```
-[1692910620827050] Response end
----
-[1692910660261006] command
-```shell
-tree . | grep main
-```
-
-[1692910660261079] Response begin
-```shell
-├── main.go
-│   ├── main.go.bak
-```
-[1692910660264888] Response end
----
-[1692910683717304] command
-```shell
-tree .
-```
-
-[1692910683717306] Response begin
-```shell
-.
-├── foo.bar
-├── go.mod
-├── go.sum
-├── graph
-│   ├── dir-graph.go
-│   ├── undir-graph.go
-│   └── weighted-graph.go
-├── heap
-│   ├── maxheap.go
-│   └── minheap.go
-├── log.md
-├── main.go
-├── queue
-│   ├── linklist.go
-│   └── redis.go
-├── runner
-│   └── runner.go
-├── serviceq
-│   ├── doc
-│   │   ├── serviceQ.postman_collection.json
-│   │   └── svcQ-state-diagram.png
-│   ├── main.go.bak
-│   ├── README.md
-│   └── serviceq.go
-├── set
-│   └── set.go
-├── stack
-│   ├── linklist.go
-│   └── redis.go
-├── store
-│   ├── hashmap-expiry.go
-│   ├── hashmap.go
-│   └── redis.go
-└── tree
-    ├── btree.go
-    └── quadtree.go
-
-11 directories, 26 files
-```
-[1692910683720222] Response end
----
-[1692910743430555] command
-```shell
-tree .
-```
-
-[1692910743430558] Response begin
-```shell
-.
-├── foo.bar
-├── go.mod
-├── go.sum
-├── graph
-│   ├── dir-graph.go
-│   ├── undir-graph.go
-│   └── weighted-graph.go
-├── heap
-│   ├── maxheap.go
-│   └── minheap.go
-├── log.md
-├── main.go
-├── queue
-│   ├── linklist.go
-│   └── redis.go
-├── runner
-│   └── runner.go
-├── serviceq
-│   ├── doc
-│   │   ├── serviceQ.postman_collection.json
-│   │   └── svcQ-state-diagram.png
-│   ├── main.go.bak
-│   ├── README.md
-│   └── serviceq.go
-├── set
-│   └── set.go
-├── stack
-│   ├── linklist.go
-│   └── redis.go
-├── store
-│   ├── hashmap-expiry.go
-│   ├── hashmap.go
-│   └── redis.go
-└── tree
-    ├── btree.go
-    └── quadtree.go
-
-11 directories, 26 files
-```
-[1692910743434328] Response end
----
-[1692910766147189] command
-```shell
-tree . |grep main
-```
-
-[1692910766147876] Response begin
-```shell
-├── main.go
-│   ├── main.go.bak
-```
-[1692910766151332] Response end
----
-[1692910773900166] command
-```shell
-tree . |grep main
-```
-
-[1692910773900168] Response begin
-```shell
-├── main.go
-│   ├── main.go.bak
-```
-[1692910773903234] Response end
----
-[1692910991773991] command
-```shell
-tree . |grep main
-```
-
-[1692910991773992] Response begin
-```shell
-├── main.go
-│   ├── main.go.bak
-```
-[1692910991777751] Response end
----
-[1692911250191957] command
-```shell
-tree . |grep main
-```
-
-[1692911250191958] Response begin
-```shell
-├── main.go
-│   ├── main.go.bak
-```
-[1692911250196201] Response end
----
-[1692911338293444] command
-```shell
-tree . |grep main
-```
-
-[1692911338293446] Response begin
-```shell
-├── main.go
-│   ├── main.go.bak
-```
-[1692911338296799] Response end
----
-[1692911573140859] command
-```shell
-ls  |grep main
-```
-
-[1692911573140873] Response begin
-```shell
-main.go
-```
-[1692911573143086] Response end
----
-[1692912221349412] command
+[1693032938666716] command
 ```shell
 ping google.com -c 4
 ```
 
-[1692912221349433] Response begin
+[1693032938666717] Response begin
 ```shell
-PING google.com (142.250.193.142) 56(84) bytes of data.
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=1 ttl=117 time=62.8 ms
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=2 ttl=117 time=11.9 ms
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=3 ttl=117 time=12.1 ms
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=4 ttl=117 time=12.1 ms
-
---- google.com ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3002ms
-rtt min/avg/max/mdev = 11.859/24.723/62.835/22.004 ms
-```
-[1692912224452351] Response end
----
-[1692912291348492] command
-```shell
-ping google.com -c 4
-```
-
-[1692912291348524] Response begin
-```shell
-PING google.com (142.250.193.142) 56(84) bytes of data.
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=1 ttl=117 time=11.5 ms
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=2 ttl=117 time=14.8 ms
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=3 ttl=117 time=15.0 ms
-64 bytes from maa05s25-in-f14.1e100.net (142.250.193.142): icmp_seq=4 ttl=117 time=11.8 ms
-
---- google.com ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3003ms
-rtt min/avg/max/mdev = 11.509/13.291/15.001/1.626 ms
-```
-[1692912294366088] Response end
----
-[1692944459559902] command
-```shell
-ping google.com -c 4
-```
-
-[1692944459559922] Response begin
-```shell
-PING google.com (172.217.31.206) 56(84) bytes of data.
-64 bytes from maa03s28-in-f14.1e100.net (172.217.31.206): icmp_seq=1 ttl=114 time=18.5 ms
-64 bytes from maa03s28-in-f14.1e100.net (172.217.31.206): icmp_seq=2 ttl=114 time=18.0 ms
-64 bytes from maa03s28-in-f14.1e100.net (172.217.31.206): icmp_seq=3 ttl=114 time=17.5 ms
-64 bytes from maa03s28-in-f14.1e100.net (172.217.31.206): icmp_seq=4 ttl=114 time=18.6 ms
+PING google.com (142.250.193.110) 56(84) bytes of data.
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=1 ttl=118 time=18.1 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=2 ttl=118 time=20.1 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=3 ttl=118 time=18.7 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=4 ttl=118 time=24.3 ms
 
 --- google.com ping statistics ---
 4 packets transmitted, 4 received, 0% packet loss, time 3004ms
-rtt min/avg/max/mdev = 17.454/18.125/18.629/0.457 ms
+rtt min/avg/max/mdev = 18.073/20.292/24.304/2.424 ms
 ```
-[1692944462784894] Response end
+[1693032941749841] Response end
 ---
-[1692944481781438] command
+[1693033848702424] command
 ```shell
-ls  |grep main
+ls -al
 ```
 
-[1692944481781457] Response begin
+[1693033848702424] Response begin
 ```shell
-main.go
+total 24
+drwxr-xr-x 1 drag drag  162 Aug 26 12:25 .
+drwxr-xr-x 1 drag drag   52 May 31 01:02 ..
+-rw-r--r-- 1 drag drag    0 Aug 23 23:51 foo.bar
+drwxr-xr-x 1 drag drag  144 Aug 25 13:54 .git
+-rw-r--r-- 1 drag drag 1429 May 10 00:38 go.mod
+-rw-r--r-- 1 drag drag 8386 May 10 00:38 go.sum
+drwxr-xr-x 1 drag drag   86 May  4 12:52 graph
+drwxr-xr-x 1 drag drag   40 May  4 12:36 heap
+-rw-r--r-- 1 drag drag  808 Aug 26 12:40 log.md
+-rw-r--r-- 1 drag drag 2848 Aug 26 12:40 main.go
+drwxr-xr-x 1 drag drag   38 May  4 12:26 queue
+drwxr-xr-x 1 drag drag   18 Aug 25 13:47 runner
+drwxr-xr-x 1 drag drag   68 May 20 22:33 serviceq
+drwxr-xr-x 1 drag drag   12 May  4 12:55 set
+drwxr-xr-x 1 drag drag   38 May  4 12:26 stack
+drwxr-xr-x 1 drag drag   70 May  4 12:31 store
+drwxr-xr-x 1 drag drag   38 May  4 12:51 tree
 ```
-[1692944481787794] Response end
+[1693033848709743] Response end
 ---
-[1692944728911959] command
+[1693033867060886] command
 ```shell
-ls  |bla main
+ping google.com -c 10
 ```
 
-[1692944728911974] Response begin
+[1693033867060909] Response begin
 ```shell
+PING google.com (142.250.196.78) 56(84) bytes of data.
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=1 ttl=59 time=41.1 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=2 ttl=59 time=42.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=3 ttl=59 time=53.7 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=4 ttl=59 time=48.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=5 ttl=59 time=69.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=6 ttl=59 time=40.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=7 ttl=59 time=40.1 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=8 ttl=59 time=30.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=9 ttl=59 time=76.9 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=10 ttl=59 time=78.0 ms
+
+--- google.com ping statistics ---
+10 packets transmitted, 10 received, 0% packet loss, time 9006ms
+rtt min/avg/max/mdev = 30.151/51.944/78.037/16.061 ms
 ```
-[1692944728913888] Response end
+[1693033876212689] Response end
 ---
-[1692944996264869] command
+[1693033884098484] command
 ```shell
-ls  |bla main
+ping google.com -c 10
 ```
 
-[1692944996264885] Response begin
+[1693033884098485] Response begin
 ```shell
+PING google.com (142.250.196.78) 56(84) bytes of data.
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=1 ttl=59 time=77.5 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=2 ttl=59 time=87.7 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=3 ttl=59 time=97.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=4 ttl=59 time=65.6 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=5 ttl=59 time=50.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=6 ttl=59 time=56.7 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=7 ttl=59 time=99.4 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=8 ttl=59 time=65.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=9 ttl=59 time=83.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=10 ttl=59 time=23.4 ms
+
+--- google.com ping statistics ---
+10 packets transmitted, 10 received, 0% packet loss, time 9005ms
+rtt min/avg/max/mdev = 23.436/70.775/99.391/22.182 ms
 ```
-[1692944996266561] Response end
+[1693033893130330] Response end
 ---
-[1692945014157651] command
+[1693033902395903] command
 ```shell
-ls  |grep main
+ping google.com -c 10
 ```
 
-[1692945014157713] Response begin
+[1693033902395904] Response begin
 ```shell
-main.go
+PING google.com (142.250.196.78) 56(84) bytes of data.
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=1 ttl=59 time=57.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=2 ttl=59 time=39.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=3 ttl=59 time=73.5 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=4 ttl=59 time=69.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=5 ttl=59 time=31.3 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=6 ttl=59 time=63.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=7 ttl=59 time=43.3 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=8 ttl=59 time=39.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=9 ttl=59 time=24.1 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=10 ttl=59 time=20.5 ms
+
+--- google.com ping statistics ---
+10 packets transmitted, 10 received, 0% packet loss, time 9013ms
+rtt min/avg/max/mdev = 20.478/46.235/73.461/17.863 ms
 ```
-[1692945014159718] Response end
+[1693033911432307] Response end
 ---
-[1692945045043489] command
+[1693033994323313] command
 ```shell
-ls  |bla main
+ping google.com -c 10
 ```
 
-[1692945045043490] Response begin
+[1693033994323314] Response begin
 ```shell
+PING google.com (142.250.196.78) 56(84) bytes of data.
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=1 ttl=59 time=43.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=2 ttl=59 time=35.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=3 ttl=59 time=44.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=4 ttl=59 time=54.5 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=5 ttl=59 time=35.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=6 ttl=59 time=46.5 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=7 ttl=59 time=17.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=8 ttl=59 time=48.3 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=9 ttl=59 time=45.3 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=10 ttl=59 time=51.8 ms
+
+--- google.com ping statistics ---
+10 packets transmitted, 10 received, 0% packet loss, time 9014ms
+rtt min/avg/max/mdev = 17.781/42.116/54.489/10.065 ms
 ```
-[1692945045045311] Response end
+[1693034003441583] Response end
 ---
-[1692945124890113] command
+[1693034154779085] command
 ```shell
-ls  |grep main
+ping google.com -c 10
 ```
 
-[1692945124890115] Response begin
+[1693034154779111] Response begin
 ```shell
-main.go
+PING google.com (142.250.196.78) 56(84) bytes of data.
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=1 ttl=59 time=20.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=2 ttl=59 time=21.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=3 ttl=59 time=20.7 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=4 ttl=59 time=18.3 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=5 ttl=59 time=22.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=6 ttl=59 time=20.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=7 ttl=59 time=17.7 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=8 ttl=59 time=20.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=9 ttl=59 time=18.1 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=10 ttl=59 time=22.4 ms
+
+--- google.com ping statistics ---
+10 packets transmitted, 10 received, 0% packet loss, time 9011ms
+rtt min/avg/max/mdev = 17.657/20.219/22.846/1.669 ms
 ```
-[1692945124892185] Response end
+[1693034163858640] Response end
 ---
-[1692945167731671] command
+[1693034189513162] command
 ```shell
-ls  |grep main
+ping google.com -c 20
 ```
 
-[1692945167731679] Response begin
+[1693034189513183] Response begin
 ```shell
-main.go
+PING google.com (142.250.196.78) 56(84) bytes of data.
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=1 ttl=59 time=25.6 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=2 ttl=59 time=21.5 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=3 ttl=59 time=22.1 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=4 ttl=59 time=24.6 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=5 ttl=59 time=18.2 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=6 ttl=59 time=21.0 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=7 ttl=59 time=64.8 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=8 ttl=59 time=20.4 ms
+64 bytes from maa03s46-in-f14.1e100.net (142.250.196.78): icmp_seq=9 ttl=59 time=21.0 ms
 ```
-[1692945167734185] Response end
+[1693034197676852] Response end
+---
+[1693035210150687] command
+```shell
+ping google.com -c 20
+```
+
+[1693035210150688] Response begin
+```shell
+PING google.com (142.250.193.110) 56(84) bytes of data.
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=1 ttl=118 time=18.7 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=2 ttl=118 time=16.5 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=3 ttl=118 time=16.5 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=4 ttl=118 time=19.7 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=5 ttl=118 time=22.8 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=6 ttl=118 time=18.2 ms
+64 bytes from maa05s24-in-f14.1e100.net (142.250.193.110): icmp_seq=7 ttl=118 time=18.9 ms
+```
+[1693035216576210] Response end
+---
+[1693037268936667] command
+```shell
+ping google.com -c 20
+```
+
+[1693037268936668] Response begin
+```shell
+PING google.com (142.250.77.142) 56(84) bytes of data.
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=1 ttl=118 time=18.9 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=2 ttl=118 time=21.5 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=3 ttl=118 time=22.7 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=4 ttl=118 time=20.8 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=5 ttl=118 time=18.1 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=6 ttl=118 time=23.1 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=7 ttl=118 time=20.6 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=8 ttl=118 time=21.5 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=9 ttl=118 time=21.2 ms
+64 bytes from maa05s16-in-f14.1e100.net (142.250.77.142): icmp_seq=10 ttl=118 time=19.7 ms
+```
+[1693037278938049] Response end
 ---
