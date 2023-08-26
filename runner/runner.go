@@ -71,13 +71,13 @@ func (r *Runner) SetWaitingPeriod(wp int) {
 	}
 }
 
-// provide a filename for log
+// provide a filename for log.
 func (r *Runner) SetLogFile(file string) {
 	r.logFile = file
 }
 
 // if verification phrase is provided, then the runner finds the phrase in the output of the system call
-// if found then
+// if found then, the status will become 'SUCCEEDED'
 func (r *Runner) SetVerificationPhrase(phrase string) {
 	r.verificationPhrase = phrase
 }
@@ -107,8 +107,7 @@ func (r *Runner) SetOnTimeoutCallback(callback func([]byte)) {
 	r.onTimeoutCallback = callback
 }
 
-//
-
+// get runner settings.
 func (r *Runner) GetState() map[string]interface{} {
 	var logSize = len(r.logBuffer)
 	return map[string]interface{}{
@@ -126,6 +125,7 @@ func (r *Runner) GetState() map[string]interface{} {
 	}
 }
 
+// get status: PENDING | RUNNING | COMPLETED | FAILED | TIMEDOUT | SUCCEEDED | KILLED
 func (r *Runner) GetStatus() string {
 	return r.status
 }
@@ -134,6 +134,7 @@ func (r *Runner) ClearLog() {
 	r.logBuffer = []byte{}
 }
 
+// execute the system call
 func (r *Runner) Execute(commands ...string) ([]byte, error) {
 	// if multiple strings arguments are provided, then concat that with &&. e.g. <cmd1> && <cmd2> && ...<cmd-n>
 	var command string
@@ -223,7 +224,6 @@ func (r *Runner) Execute(commands ...string) ([]byte, error) {
 				return
 			}
 		}
-
 	}()
 
 	// Execute the command
@@ -321,7 +321,7 @@ func (r *Runner) ClearLogs() {
 
 // reexecute the runner
 func (r *Runner) Restart() {
-	// code
+	// TODO
 }
 
 func (r *Runner) Kill() {
