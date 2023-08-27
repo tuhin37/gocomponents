@@ -19,7 +19,7 @@ import (
 
 var STDPIPE = make(chan []byte)
 
-// ------------------------- ServiceQ -------------------------
+// ------------------------- Runner properties -------------------------
 type Runner struct {
 	id                   string       // id of the runner. md5(epoch+sysCmd)
 	isConsole            bool         // if set to true then the shell's commands output is printed on console. default=false
@@ -40,7 +40,7 @@ type Runner struct {
 	onTimeoutCallback    func([]byte) // This function gets called when the system call took more than the defined timeout duration.
 }
 
-// ----------------------- constructor -----------------------
+// ---------------------------- constructor ----------------------------
 func NewRunner(cmd string) *Runner {
 	// TODO take a second optional string parameter. if that is set to "RUN_ONCE" then this function's behaviour will be modified and
 	// initialize a runner with default settings and a system command
@@ -51,6 +51,7 @@ func NewRunner(cmd string) *Runner {
 	return r
 }
 
+// ------------------------------ methods ------------------------------
 // enable console print
 func (r *Runner) EnableConsole() {
 	r.isConsole = true
@@ -130,10 +131,6 @@ func (r *Runner) GetStatus() string {
 	return r.status
 }
 
-func (r *Runner) ClearLog() {
-	r.logBuffer = []byte{}
-}
-
 // execute the system call
 func (r *Runner) Execute(commands ...string) ([]byte, error) {
 	// if multiple strings arguments are provided, then concat that with &&. e.g. <cmd1> && <cmd2> && ...<cmd-n>
@@ -207,6 +204,7 @@ func (r *Runner) Execute(commands ...string) ([]byte, error) {
 
 			// print to console
 			if r.isConsole {
+				// TODO: make the console log pretty by encapsulating command and response in their own code block with timestamp and ascii art
 				fmt.Println(stdoutLine)
 			}
 
@@ -337,7 +335,7 @@ func (r *Runner) Kill() {
 	}
 }
 
-// ----------------------- utility ---------------------------------
+// ----------------------------- utility -----------------------------
 func calculateMD5(data interface{}) string {
 	var buffer bytes.Buffer
 	encoder := gob.NewEncoder(&buffer)
