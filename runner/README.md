@@ -186,3 +186,264 @@ Kill on demand
 ```go
 runr.Kill()
 ```
+
+
+
+---
+
+## Example code
+
+Here is a sample code with gin framework to showcase few use cases.
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+
+	"github.com/gin-gonic/gin"
+	"github.com/tuhin37/gocomponents/runner"
+)
+
+// declear a global runner object
+var runr *runner.Runner
+
+func init() {
+	runr = runner.NewRunner("ping google.com -c 4") // instantiate the runner object
+	runr.SetLogFile("log.md")                       // logfile name; if not defined, file logging disabled
+	runr.SetVerificationPhrase(".go")               // verification phrase, if found in the output then status - > SUCCEEDED
+	runr.EnableConsole()                            // the system output will be printed on console
+	runr.SetWaitingPeriod(10)                       // wait 10s before execuiting
+	runr.SetTimeout(5)                              // set timeout of 5s.
+
+	runr.SetOnNewLineCallback(logCallback) // set callback function
+}
+
+func main() {
+	r := gin.Default()
+
+	// routes
+	r.POST("/exec-payload", execPayload)
+	r.GET("/exec", exec)
+	r.POST("/exec-payload-async", execPayloadAsync)
+	r.GET("/state", getState)
+	r.GET("/status", getStatus)
+	r.GET("/kill", kill)
+
+	r.Run(":5000")
+}
+
+// controllers
+func getState(c *gin.Context) {
+	c.AsciiJSON(200, runr.GetState())
+}
+
+func getStatus(c *gin.Context) {
+	c.AsciiJSON(200, runr.GetStatus())
+}
+
+func kill(c *gin.Context) {
+	runr.Kill()
+	c.AsciiJSON(200, runr.GetStatus())
+}
+
+func execPayload(c *gin.Context) {
+	// Read the request body
+	requestBodyBytes, err := c.GetRawData()
+	if err != nil {
+		log.Println("Error reading request body:", err)
+		c.JSON(500, gin.H{"error": "Internal Server Error"})
+		return
+	}
+
+	// Parse the request body JSON into a map
+	var data map[string]string
+	if err := json.Unmarshal(requestBodyBytes, &data); err != nil {
+		log.Println("Error parsing JSON:", err)
+		c.JSON(400, gin.H{"error": "Bad Request"})
+		return
+	}
+
+	command := data["instruction"]
+	_ = command
+
+	// ATP: command holds the system call command. e.g. "ls -al | grep main && tree ."
+	stdout, _ := runr.Execute(command)
+	c.String(200, string(stdout))
+}
+
+func exec(c *gin.Context) {
+	// ATP: command holds the system call command. e.g. "ls -al | grep main && tree ."
+	stdout, _ := runr.Execute()
+	c.String(200, string(stdout))
+}
+
+func execPayloadAsync(c *gin.Context) {
+	// Read the request body
+	requestBodyBytes, err := c.GetRawData()
+	if err != nil {
+		log.Println("Error reading request body:", err)
+		c.JSON(500, gin.H{"error": "Internal Server Error"})
+		return
+	}
+
+	// Parse the request body JSON into a map
+	var data map[string]string
+	if err := json.Unmarshal(requestBodyBytes, &data); err != nil {
+		log.Println("Error parsing JSON:", err)
+		c.JSON(400, gin.H{"error": "Bad Request"})
+		return
+	}
+
+	command := data["instruction"]
+	_ = command
+
+	// ATP: command holds the system call command. e.g. "ls -al | grep main && tree ."
+	go runr.Execute(command)
+
+	c.String(200, "ok")
+}
+
+// callback function
+func logCallback(logLine []byte) {
+	fmt.Println("Log: ", string(logLine))
+}
+
+```
+
+
+
+#### Test
+
+Execute blocking
+
+```shell
+curl --location 'http://127.0.0.1:5000/exec'
+```
+
+
+
+Response
+
+```json
+PING google.com (172.217.166.110) 56(84) bytes of data.
+64 bytes from maa05s09-in-f14.1e100.net (172.217.166.110): icmp_seq=1 ttl=118 time=16.9 ms
+64 bytes from maa05s09-in-f14.1e100.net (172.217.166.110): icmp_seq=2 ttl=118 time=26.7 ms
+64 bytes from maa05s09-in-f14.1e100.net (172.217.166.110): icmp_seq=3 ttl=118 time=21.9 ms
+64 bytes from maa05s09-in-f14.1e100.net (172.217.166.110): icmp_seq=4 ttl=118 time=22.9 ms
+
+--- google.com ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3003ms
+rtt min/avg/max/mdev = 16.890/22.102/26.663/3.488 ms
+
+```
+
+
+
+
+
+Execute blocking with custom command payload
+
+```shell
+curl --location 'http://127.0.0.1:5000/exec-payload' \
+--header 'Content-Type: application/json' \
+--data '{
+    "instruction": "ls -al |grep main"
+}'
+```
+
+
+
+Response
+
+```json
+-rw-r--r--  1 drag drag 2919 Aug 28 16:45 main.go
+```
+
+
+
+
+
+Execute async with custom payload
+
+```shell
+curl --location 'http://127.0.0.1:5000/exec-payload-async' \
+--header 'Content-Type: application/json' \
+--data '{
+    "instruction": "tree ."
+}'
+```
+
+
+
+Response
+
+```json
+ok
+```
+
+
+
+Get current settings
+
+```shell
+curl --location 'http://127.0.0.1:5000/state'
+```
+
+
+
+Response
+
+```json
+{
+    "console": true,
+    "execuited_at": 1693221850593927888,
+    "execution_time_nano": 6292534,
+    "file_path": "log.md",
+    "id": "172ac965ab5c52e7d83a4af59dae77ba",
+    "log_size_bytes": 93,
+    "status": "SUCCEEDED",
+    "system_command": "tree .",
+    "timeout": 5,
+    "verification_phrase": ".go",
+    "waiting_period": 10
+}
+```
+
+
+
+
+
+Get current status
+
+```shell
+curl --location 'http://127.0.0.1:5000/status'
+```
+
+
+
+Response
+
+```json
+"SUCCEEDED"
+```
+
+
+
+
+
+Kill a ongoing system call
+
+```shell
+curl --location 'http://127.0.0.1:5000/kill'
+```
+
+
+
+Reponse
+
+```json
+"KILLED"
+```
