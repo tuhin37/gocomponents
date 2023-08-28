@@ -317,11 +317,6 @@ func (r *Runner) ClearLogs() {
 	r.logBuffer = []byte{}
 }
 
-// reexecute the runner
-func (r *Runner) Restart() {
-	// TODO
-}
-
 func (r *Runner) Kill() {
 	// kill on-demand
 	// TODO: Move it into a new method
