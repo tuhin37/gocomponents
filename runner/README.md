@@ -61,9 +61,9 @@ A runner is a custom go component, designed to help execute system commands, say
 
 ### State diagram
 
+The diagram bellow, illustrates different states the runner object can be in and what causes the state to change. 
 
-
-
+<img title="" src="../docs/runner-state.drawio.png" alt="runner-state.drawio.png" data-align="center">
 
 ### Usage
 
