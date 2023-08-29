@@ -90,36 +90,30 @@ Optionally, define other callback functions
 ```go
 // onSuccessCallback
 func successCallback(stdout []byte) {
-	fmt.Println("execuition successful: ", string(stdout))
+    fmt.Println("execuition successful: ", string(stdout))
 }
 
 // onFailCallback
 func failCallback(stdout []byte) {
-	fmt.Println("execuition failed: ", string(stdout))
+    fmt.Println("execuition failed: ", string(stdout))
 }
 
 // onCompleteCallback
 func completeCallback(stdout []byte) {
-	fmt.Println("execuition completed: ", string(stdout))
+    fmt.Println("execuition completed: ", string(stdout))
 }
 
 // onTimeoutCallback
 func timeoutCallback(stdout []byte) {
-	fmt.Println("execuition timedout: ", string(stdout))
+    fmt.Println("execuition timedout: ", string(stdout))
 }
 ```
-
-
 
 Attach the above function as a Log-callback function to the runner
 
 ```go
 runr.SetOnNewLineCallback(logCallback)
 ```
-
-
-
-
 
 Execute the runner with the command pre loaded
 
@@ -198,9 +192,6 @@ import (
     "github.com/gin-gonic/gin"
     "github.com/tuhin37/gocomponents/runner"
 )
-
-
-
 ```
 
 #### Test
@@ -213,7 +204,7 @@ curl --location 'http://127.0.0.1:5000/exec'
 
 Response
 
-```json
+```shell
 PING google.com (172.217.166.110) 56(84) bytes of data.
 64 bytes from maa05s09-in-f14.1e100.net (172.217.166.110): icmp_seq=1 ttl=118 time=16.9 ms
 64 bytes from maa05s09-in-f14.1e100.net (172.217.166.110): icmp_seq=2 ttl=118 time=26.7 ms
@@ -237,7 +228,7 @@ curl --location 'http://127.0.0.1:5000/exec-payload' \
 
 Response
 
-```json
+```shell
 -rw-r--r--  1 drag drag 2919 Aug 28 16:45 main.go
 ```
 
@@ -253,7 +244,7 @@ curl --location 'http://127.0.0.1:5000/exec-payload-async' \
 
 Response
 
-```json
+```shell
 ok
 ```
 
@@ -289,7 +280,7 @@ curl --location 'http://127.0.0.1:5000/status'
 
 Response
 
-```json
+```shell
 "SUCCEEDED"
 ```
 
@@ -301,6 +292,6 @@ curl --location 'http://127.0.0.1:5000/kill'
 
 Reponse
 
-```json
+```shell
 "KILLED"
 ```
