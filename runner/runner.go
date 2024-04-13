@@ -239,7 +239,7 @@ func (r *Runner) Execute(commands ...string) ([]byte, error) {
 	}()
 
 	// Let's simulate a timeout
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(time.Duration(r.timeout) * time.Second)
 
 	select {
 	case <-done:
