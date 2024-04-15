@@ -29,5 +29,14 @@ func main() {
 Output
 
 ```shell
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=59 time=14.7 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=59 time=13.8 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=59 time=13.7 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=59 time=14.4 ms
+64 bytes from 8.8.8.8: icmp_seq=5 ttl=59 time=13.8 ms
 
+--- 8.8.8.8 ping statistics ---
+5 packets transmitted, 5 received, 0% packet loss, time 4006ms
+rtt min/avg/max/mdev = 13.739/14.072/14.656/0.367 ms
 ```
