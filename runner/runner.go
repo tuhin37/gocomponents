@@ -319,7 +319,9 @@ func (r *Runner) Execute(commands ...string) ([]byte, error) {
 
 // read logs buffer
 func (r *Runner) Logs() string {
-	return string(r.logBuffer)
+	logString := string(r.logBuffer)
+	logString = strings.TrimRight(logString, "\n") // remove the trailing newline character `\n`
+	return logString
 }
 
 func (r *Runner) Kill() {
