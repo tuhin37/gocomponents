@@ -20,7 +20,7 @@ At this point you are ready to play around with the `runner` component. Refer th
 #### Concepts with exmaples
 
 1. [Simple example](./docs/example-simple.md)
-2. [Console log](./docs/console-print.md)
+2. [Console log](./docs/example-console-print.md)
 3. [Timeout](./docs/example-timeout.md)
 4. [Waiting period](./docs/example-waiting.md)
 5. [Logfile](./docs/example-logfile.md)
@@ -30,6 +30,7 @@ At this point you are ready to play around with the `runner` component. Refer th
 9. [Config & status](./docs/example-get-config.md)
 10. [Logs](./docs/example-logs.md)
 11. [Kill](./docs/example-kill.md)
+12. [Advanced overrides](./docs/example-overrides.md)
 
 ### 
 
@@ -57,3 +58,9 @@ At this point you are ready to play around with the `runner` component. Refer th
 | onCompleteCallback   | func(*Runner) | private | user-configurable | W           | func onCompleteCallback(r *runner.Runner) {} | n/a           | if attached, an user-defined callback function will be called if and when the system call exits with exit-code=0 and verification is disabled                                       | .SetOnCompleteCallback()                           |
 | onFailCallback       | func(*Runner) | private | user-configurable | W           | func onFailCallback(r *runner.Runner) {}     | n/a           | if attached, an user-defined callback function will be called if and when the system call exits with a non-zero status-code                                                         | .SetOnFailCallback()                               |
 | onTimeoutCallback    | func(*Runner) | private | user-configurable | W           | func timeoutCallback(r *runner.Runner) {}    | n/a           | if attached an user-defined callback function will be called if and when the system call times out                                                                                  | .SetTimeout()                                      |
+
+#### Execution flow
+
+The execution flow of a runner instance is shown in the diagram bellow. Please note that, even though the execution of a runner instance uses multipel go routines and async function executio, in this diagram the runner instance itself is executed as a synchronous blocking function. However, the user may choose to execute the runner instance as a go routine (async, non-blocking call). In such cases, user will have to manage execution flow using either wait groups, or by using channels.  
+
+<img title="" src="file:///home/drag/programming/personal/go/module/gocomponents/runner/docs/execution-flow.svg" alt="execution-flow.svg" width="727">
