@@ -65,10 +65,10 @@ The execution flow of a runner instance is shown in the diagram bellow. Please n
 
 <img title="" src="./docs/execution-flow-chart.svg" alt="execution-flow.svg" width="727">
 
-- Open flowchart live on [draw.io]([gorunner-execution.drawio - Google Drive](https://drive.google.com/file/d/1uDGOMF3Rdo-bVNjPDWY5w-k5XXOSoPZC/view?usp=sharing))
+- Open flowchart live on [draw.io](https://drive.google.com/file/d/1uDGOMF3Rdo-bVNjPDWY5w-k5XXOSoPZC/view?usp=sharing)
 
 - Open flowchart in [actual size](https://raw.githubusercontent.com/tuhin37/gocomponents/main/runner/docs/execution-flow-chart.svg)
 
-- Download the draw.io file from [Google Drive]([gorunner-execution.drawio - Google Drive](https://drive.google.com/file/d/1uDGOMF3Rdo-bVNjPDWY5w-k5XXOSoPZC/view?usp=sharing))
+- Download the draw.io file from [Google Drive](https://drive.google.com/file/d/1uDGOMF3Rdo-bVNjPDWY5w-k5XXOSoPZC/view?usp=sharing)
 
 - Download  the local draw.io file from this [repository](https://raw.githubusercontent.com/tuhin37/gocomponents/main/runner/docs/gorunner-execution.drawio)
