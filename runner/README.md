@@ -64,3 +64,11 @@ At this point you are ready to play around with the `runner` component. Refer th
 The execution flow of a runner instance is shown in the diagram bellow. Please note that, even though the execution of a runner instance uses multipel go routines and async function executio, in this diagram the runner instance itself is executed as a synchronous blocking function. However, the user may choose to execute the runner instance as a go routine (async, non-blocking call). In such cases, user will have to manage execution flow using either wait groups, or by using channels.  
 
 <img title="" src="./docs/execution-flow-chart.svg" alt="execution-flow.svg" width="727">
+
+- Open flowchart live on [draw.io](gorunner-execution.drawio - Google Drive]([gorunner-execution.drawio - Google Drive](https://drive.google.com/file/d/1uDGOMF3Rdo-bVNjPDWY5w-k5XXOSoPZC/view?usp=sharing)) 
+
+- Open flowchart in actual size
+
+- Download the draw.io file from Google Drive
+
+- Download  the local draw.io file from this repository
