@@ -15,7 +15,7 @@ The Runner is a component written in Go and part of the [gocomponents](https://g
 - download `gocomponents` package from github, by execuiting `go get -u github.com/tuhin37/gocomponents`.
   Alternatively, you can specify a required version number of this repo by execuiting `go get -u github.com/tuhin37/gocomponents@v1.0.9`
 
-At this point you are ready to play around with the `runner` component. Refer the example and explanation bellow for more details
+Now you're set to experiment with the `runner` component. Check out the examples  below for more details.
 
 #### Concepts with exmaples
 
